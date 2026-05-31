@@ -30,10 +30,10 @@ export function Chat() {
   const agent = useAgent<typeof RestaurantAgent>({
     agent: 'RestaurantAgent',
     name: 'default',
-    onStateUpdate: (state: AgentSyncState) => {
+    onStateUpdate: ((state: AgentSyncState) => {
       if (state?.model) setModel(state.model)
       if (state?.mode) setMode(state.mode)
-    },
+    }) as never,
   })
 
   const { messages, sendMessage, status } = useAgentChat({ agent })
@@ -93,14 +93,16 @@ export function Chat() {
     setInput('')
   }
 
+  const setAgentState = agent.setState as unknown as (s: AgentSyncState) => void
+
   const handleModelChange = (id: ModelId) => {
     setModel(id)
-    agent.setState({ model: id, mode })
+    setAgentState({ model: id, mode })
   }
 
   const handleModeChange = (m: Mode) => {
     setMode(m)
-    agent.setState({ model, mode: m })
+    setAgentState({ model, mode: m })
   }
 
   const handleFile = (file: File | null) => {

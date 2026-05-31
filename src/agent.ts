@@ -1,6 +1,6 @@
 import { AIChatAgent } from '@cloudflare/ai-chat'
 import { callable } from 'agents'
-import { convertToModelMessages, streamText, type UIMessage } from 'ai'
+import { convertToModelMessages, streamText, type ToolSet, type UIMessage } from 'ai'
 import { createWorkersAI } from 'workers-ai-provider'
 import { DEFAULT_MODE, type Mode } from './modes'
 import { DEFAULT_MODEL, type ModelId } from './models'
@@ -53,7 +53,7 @@ export class RestaurantAgent extends AIChatAgent<CloudflareBindings, AgentState>
     const mode = this.state.mode
 
     const searchTool = makeSearchRestaurantsTool(this.env.DB)
-    const tools =
+    const tools: ToolSet =
       mode === 'controlled'
         ? { search_restaurants: searchTool }
         : mode === 'declarative'
