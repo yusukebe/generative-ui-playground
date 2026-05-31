@@ -36,7 +36,7 @@ export function Chat() {
     }) as never,
   })
 
-  const { messages, sendMessage, status } = useAgentChat({ agent })
+  const { messages, sendMessage, status, clearHistory } = useAgentChat({ agent })
   const [input, setInput] = useState('')
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
@@ -136,6 +136,14 @@ export function Chat() {
         <span className='chat__title'>レストラン提案</span>
         <div className='chat__header-right'>
           <ModelSelector value={model} onChange={handleModelChange} />
+          <button
+            type='button'
+            className='chat__clear'
+            onClick={() => clearHistory()}
+            title='会話履歴をクリア'
+          >
+            Clear
+          </button>
           <span className='chat__status' data-status={status}>
             {isRegistering ? 'registering' : status}
           </span>

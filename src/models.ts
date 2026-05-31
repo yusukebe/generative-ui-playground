@@ -1,4 +1,5 @@
 export type ModelId =
+  | '@cf/moonshotai/kimi-k2.6'
   | '@cf/meta/llama-4-scout-17b-16e-instruct'
   | '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
   | '@cf/meta/llama-3.1-8b-instruct'
@@ -13,6 +14,12 @@ export type ModelInfo = {
 }
 
 export const MODELS: ModelInfo[] = [
+  {
+    id: '@cf/moonshotai/kimi-k2.6',
+    label: 'Kimi K2.6',
+    vendor: 'Moonshot AI',
+    description: '1T MoE · 多段ツール対応',
+  },
   {
     id: '@cf/meta/llama-4-scout-17b-16e-instruct',
     label: 'Llama 4 Scout',

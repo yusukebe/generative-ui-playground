@@ -121,6 +121,20 @@ body,
   background: var(--surface-2);
 }
 
+.chat__clear {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.chat__clear:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
 .model-selector {
   display: inline-flex;
   align-items: center;

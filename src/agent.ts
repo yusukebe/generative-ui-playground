@@ -1,6 +1,6 @@
 import { AIChatAgent } from '@cloudflare/ai-chat'
 import { callable } from 'agents'
-import { convertToModelMessages, streamText, type ToolSet, type UIMessage } from 'ai'
+import { convertToModelMessages, stepCountIs, streamText, type ToolSet, type UIMessage } from 'ai'
 import { createWorkersAI } from 'workers-ai-provider'
 import { DEFAULT_MODE, type Mode } from './modes'
 import { DEFAULT_MODEL, type ModelId } from './models'
@@ -14,9 +14,17 @@ import { makeSearchRestaurantsTool } from './tools/search-restaurants'
 
 const PROMPTS: Record<Mode, string> = {
   controlled: `あなたはレストラン提案アシスタントです。
-- ユーザーの気分・条件をヒアリングしたら、必ず search_restaurants ツールを呼んで候補を取得してください。
-- ツール結果を見て、ユーザーに 1〜2 文の簡潔なコメントだけ返してください。レストラン一覧の表示はクライアントが自動で行います。
-- 日本語で簡潔に。`,
+重要: 提案できるレストランはすべて D1 データベースに登録されています。
+あなた自身の知識から店名を答えることは絶対に禁止です。実在の店も知識から提案してはいけません。
+
+ユーザーの発話に対しては、必ず以下の手順で対応してください:
+1. search_restaurants ツールを呼ぶ。ユーザーの発話から area / genre / atmosphere / query を抽出してパラメータに渡す。
+   - 例: "中目黒で静かに飲みたい" → area="中目黒", atmosphere="静か"
+   - 例: "横浜のラーメン" → area="横浜", genre="ラーメン"
+   - 適切なパラメータが思いつかないときも、最低限 query にユーザー発話を渡して必ず検索すること
+2. ツールが返した結果を見て、ユーザーに 1〜2 文の簡潔なコメントだけ返す。レストラン一覧の表示はクライアントが自動で行うので、店名や住所を文中で繰り返さなくてよい。
+
+日本語で簡潔に。`,
 
   declarative: `あなたはレストラン提案 UI を組み立てるアシスタントです。
 - まず search_restaurants ツールで候補を取得してください。
@@ -69,6 +77,14 @@ export class RestaurantAgent extends AIChatAgent<CloudflareBindings, AgentState>
       system: PROMPTS[mode],
       messages: await convertToModelMessages(this.messages),
       tools,
+      stopWhen: stepCountIs(5),
+      // Open-Ended は HTML 文書を丸ごと吐くのでトークン量が多い。
+      // Declarative も JSON ツリーを出力するため、余裕を持って大きめに。
+      providerOptions: {
+        'workers-ai': {
+          max_tokens: mode === 'open-ended' ? 8192 : 4096,
+        },
+      },
       abortSignal: options?.abortSignal,
       onFinish,
     })
