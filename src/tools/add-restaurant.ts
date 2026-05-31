@@ -22,6 +22,7 @@ export type AddRestaurantInput = {
   text: string
   imageDataUrl?: string
   imageMime?: string
+  adminToken?: string
 }
 
 export type AddRestaurantResult = {

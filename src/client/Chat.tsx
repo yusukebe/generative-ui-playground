@@ -23,9 +23,15 @@ function fileToDataURL(file: File): Promise<string> {
   })
 }
 
+const ADMIN_TOKEN_KEY = 'generative-ui-playground:admin-token'
+
 export function Chat() {
   const [mode, setMode] = useState<Mode>(DEFAULT_MODE)
   const [model, setModel] = useState<ModelId>(DEFAULT_MODEL)
+  const [adminToken, setAdminToken] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : localStorage.getItem(ADMIN_TOKEN_KEY)
+  )
+  const isAdmin = !!adminToken
 
   const agent = useAgent<typeof RestaurantAgent>({
     agent: 'RestaurantAgent',
@@ -79,10 +85,8 @@ export function Chat() {
     if (isBusy) return
 
     if (imageFile) {
-      // 登録フロー
-      if (!input.trim()) {
-        // 画像のみでも登録できるようにテキストは空でも進める
-      }
+      // 登録フロー (admin 限定)
+      if (!isAdmin) return
       setIsRegistering(true)
       try {
         const dataUrl = await fileToDataURL(imageFile)
@@ -90,6 +94,7 @@ export function Chat() {
           text: input,
           imageDataUrl: dataUrl,
           imageMime: imageFile.type,
+          adminToken: adminToken ?? undefined,
         })
         setInput('')
         setImageFile(null)
@@ -139,14 +144,28 @@ export function Chat() {
   const handleFile = (file: File | null) => {
     if (!file) return
     if (!file.type.startsWith('image/')) return
+    if (!isAdmin) return
     setImageFile(file)
   }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setDropZoneActive(false)
+    if (!isAdmin) return
     const file = e.dataTransfer.files?.[0]
     handleFile(file ?? null)
+  }
+
+  const handleAdminToggle = () => {
+    if (isAdmin) {
+      localStorage.removeItem(ADMIN_TOKEN_KEY)
+      setAdminToken(null)
+      return
+    }
+    const t = window.prompt('Admin token を入力してください')
+    if (!t) return
+    localStorage.setItem(ADMIN_TOKEN_KEY, t)
+    setAdminToken(t)
   }
 
   return (
@@ -165,6 +184,7 @@ export function Chat() {
     >
       <header className='chat__header'>
         <span className='chat__title'>レストラン提案</span>
+        <ModeSelector value={mode} onChange={handleModeChange} />
         <div className='chat__header-right'>
           <ModelSelector value={model} onChange={handleModelChange} />
           <button
@@ -174,6 +194,15 @@ export function Chat() {
             title='会話履歴をクリア'
           >
             Clear
+          </button>
+          <button
+            type='button'
+            className='chat__admin'
+            data-active={isAdmin}
+            onClick={handleAdminToggle}
+            title={isAdmin ? '管理モード ON (クリックで解除)' : '管理モードに切替'}
+          >
+            {isAdmin ? '🔓 Admin' : '🔒'}
           </button>
           <span className='chat__status' data-status={status}>
             {isRegistering ? 'registering' : status}
@@ -195,12 +224,27 @@ export function Chat() {
             message={m as { id: string; role: string; parts: MessagePart[] }}
           />
         ))}
+        {isBusy && (
+          <div className='thinking-indicator'>
+            <span className='thinking-indicator__dots'>
+              <span />
+              <span />
+              <span />
+            </span>
+            <span className='thinking-indicator__label'>
+              {isRegistering
+                ? 'レストランを登録中…'
+                : status === 'submitted'
+                  ? 'リクエスト送信済、応答待ち…'
+                  : 'AI が考え中…'}
+            </span>
+          </div>
+        )}
         {dropZoneActive && <div className='drop-overlay'>📷 ここにドロップしてお店を登録</div>}
         <div ref={endRef} />
       </div>
 
       <form className='chat__form' onSubmit={handleSubmit}>
-        <ModeSelector value={mode} onChange={handleModeChange} />
         {imagePreview && (
           <div className='image-preview'>
             <img src={imagePreview} alt='登録予定' />
@@ -216,21 +260,25 @@ export function Chat() {
           </div>
         )}
         <div className='chat__input-row'>
-          <button
-            type='button'
-            className='chat__attach'
-            onClick={() => fileInputRef.current?.click()}
-            title='画像を添付'
-          >
-            📷
-          </button>
-          <input
-            ref={fileInputRef}
-            type='file'
-            accept='image/*'
-            style={{ display: 'none' }}
-            onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
-          />
+          {isAdmin && (
+            <>
+              <button
+                type='button'
+                className='chat__attach'
+                onClick={() => fileInputRef.current?.click()}
+                title='画像を添付 (admin)'
+              >
+                📷
+              </button>
+              <input
+                ref={fileInputRef}
+                type='file'
+                accept='image/*'
+                style={{ display: 'none' }}
+                onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+              />
+            </>
+          )}
           <input
             type='text'
             name='chat-input'
@@ -254,7 +302,7 @@ export function Chat() {
             className='chat__send'
             disabled={isBusy || (!input.trim() && !imageFile)}
           >
-            {imageFile ? '登録' : '送信'}
+            {isBusy ? '応答中…' : imageFile ? '登録' : '送信'}
           </button>
         </div>
       </form>

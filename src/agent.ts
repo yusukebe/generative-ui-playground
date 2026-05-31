@@ -117,6 +117,10 @@ export class RestaurantAgent extends AIChatAgent<CloudflareBindings, AgentState>
 
   @callable()
   async registerRestaurant(input: AddRestaurantInput): Promise<AddRestaurantResult> {
+    const expected = this.env.ADMIN_TOKEN
+    if (expected && input.adminToken !== expected) {
+      throw new Error('Unauthorized: invalid admin token')
+    }
     const result = await addRestaurant(this.env, input)
 
     const now = Date.now()
