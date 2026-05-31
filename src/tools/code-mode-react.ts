@@ -16,7 +16,7 @@ import { DynamicWorkerExecutor } from '@cloudflare/codemode'
 import { aiTools, generateTypes, resolveProvider } from '@cloudflare/codemode/ai'
 import { createWorker } from '@cloudflare/worker-bundler'
 import { tool, type ToolSet } from 'ai'
-import * as ts from 'typescript'
+import { transform } from 'sucrase'
 import { z } from 'zod'
 // Vite の ?raw で TSX のソースを文字列として取り込む
 // (worker-bundler に渡してサンドボックス向け ESM に再バンドルする)
@@ -173,14 +173,13 @@ async (codemode) => {
       code: z.string().describe('JSX を含む async アロー関数のコード'),
     }),
     execute: async ({ code }) => {
-      // 1. JSX → React.createElement へ変換 (TypeScript の transpiler を使用)
-      const transformed = ts.transpileModule(code, {
-        compilerOptions: {
-          jsx: ts.JsxEmit.React, // classic = React.createElement
-          target: ts.ScriptTarget.ES2022,
-          module: ts.ModuleKind.ESNext,
-        },
-      }).outputText
+      // 1. JSX → React.createElement へ変換
+      // (TypeScript の transpileModule は __filename 等の Node API を使うため
+      //  Worker runtime では動かない。Worker 互換の sucrase を使う)
+      const transformed = transform(code, {
+        transforms: ['jsx'],
+        jsxRuntime: 'classic',
+      }).code
 
       // 2. ヘルパーを動的 import するラッパで包む
       const wrapped = `async (codemode) => {
