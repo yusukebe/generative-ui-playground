@@ -284,15 +284,23 @@ function CodeModeView({ part }: { part: ToolPart }) {
   const output = part.output
   const code = input?.code
 
-  // output が render_ui / render_html / restaurants の形なら認識して描画
+  // codemode は `{ result: ... }` で包んで返すことがあるので一段ほどく
+  const peel = (v: unknown): unknown => {
+    if (v && typeof v === 'object' && 'result' in v) {
+      return (v as { result: unknown }).result
+    }
+    return v
+  }
+  const actual = peel(output)
+
   let body: React.ReactNode = (
     <details className='tool-result'>
-      <summary>実行結果</summary>
+      <summary>実行結果 (生データ)</summary>
       <pre>{JSON.stringify(output, null, 2)}</pre>
     </details>
   )
-  if (output && typeof output === 'object') {
-    const o = output as Record<string, unknown>
+  if (actual && typeof actual === 'object') {
+    const o = actual as Record<string, unknown>
     if (Array.isArray((o as { restaurants?: unknown }).restaurants)) {
       body = <RestaurantList restaurants={(o as { restaurants: Restaurant[] }).restaurants} />
     } else if (Array.isArray((o as { sections?: unknown }).sections)) {

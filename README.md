@@ -156,23 +156,23 @@ sequenceDiagram
 sequenceDiagram
   participant U as User
   participant L as LLM
-  participant T1 as search_restaurants
+  participant T as search_restaurants
   participant DB as D1
-  participant T2 as render_ui (echo back)
   participant P as PartView
   participant V as DeclarativeView
 
   U->>L: 関内で静かに飲みたい
-  L->>T1: tool call
-  T1->>DB: SELECT ...
-  DB-->>T1: rows
-  T1-->>L: { restaurants: [...] }
-  L->>T2: tool call (Section / Card プリミティブの JSON ツリー)
-  T2-->>L: 入力をそのまま返す (echo back)
-  L-->>P: tool-render_ui part
-  P->>V: ui ツリーを props で渡す
+  L->>T: tool call
+  T->>DB: SELECT ...
+  DB-->>T: rows
+  T-->>L: { restaurants: [...] }
+  Note over L: render_ui を呼ぶ<br/>(Section / Card で UI ツリー組立)
+  L-->>P: tool-render_ui part (ui ツリー)
+  P->>V: ui を props で渡す
   V-->>U: Section / Card を再帰描画
 ```
+
+`render_ui` は input をそのまま output に echo するだけのツール — 実体は「LLM が組み立てた JSON ツリーをそのままクライアントに届ける搬送路」。
 
 ポイント: LLM は語彙 (`Card` / `Section`) の中で**自由に配置**できる。開発者は語彙とそのスキーマ (Zod, src/schemas/declarative.ts) を定義しただけ。
 
@@ -182,23 +182,23 @@ sequenceDiagram
 sequenceDiagram
   participant U as User
   participant L as LLM
-  participant T1 as search_restaurants
+  participant T as search_restaurants
   participant DB as D1
-  participant T2 as render_html (echo back)
   participant P as PartView
   participant I as OpenEndedView (iframe + CSP)
 
   U->>L: 関内で静かに飲みたい
-  L->>T1: tool call
-  T1->>DB: SELECT ...
-  DB-->>T1: rows
-  T1-->>L: { restaurants: [...] }
-  L->>T2: tool call (完全な HTML 文書を生成)
-  T2-->>L: 入力をそのまま返す (echo back)
-  L-->>P: tool-render_html part
+  L->>T: tool call
+  T->>DB: SELECT ...
+  DB-->>T: rows
+  T-->>L: { restaurants: [...] }
+  Note over L: render_html を呼ぶ<br/>(完全な HTML 文書を生成)
+  L-->>P: tool-render_html part (html)
   P->>I: html を srcDoc に注入
   I-->>U: iframe (allow-scripts + CSP) 内で実行
 ```
+
+`render_html` も同じく echo back。LLM が吐いた HTML 文字列を iframe に届けるための搬送路。
 
 ポイント: 描画の自由度は最大。開発者は CSP の許可リストだけ書いている。
 
