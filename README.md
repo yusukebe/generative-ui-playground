@@ -129,32 +129,76 @@ streamText({
 
 ### Controlled
 
-1. ユーザ「関内で静かに飲みたい」
-2. LLM が `search_restaurants({ area: '関内', atmosphere: '静か' })` を tool call
-3. AI SDK がツールを実行 → `searchRestaurants()` (src/tools/search-restaurants.ts) が D1 を `SELECT * FROM restaurants WHERE area LIKE ?` でクエリ
-4. ツール結果 `{ restaurants: [...] }` がメッセージの parts に `{ type: 'tool-search_restaurants', state: 'output-available', output }` として乗る
-5. クライアントの `PartView` (src/client/Chat.tsx) が type を見て `<RestaurantList restaurants={...} />` をレンダ
-6. `RestaurantList` が各レストランを `<RestaurantCard>` でマップして並べる
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant L as LLM<br/>(Workers AI)
+  participant T as search_restaurants<br/>(tool execute)
+  participant DB as D1
+  participant P as PartView (client)
+  participant V as &lt;RestaurantList /&gt;
+
+  U->>L: 「関内で静かに飲みたい」
+  L->>T: tool call<br/>{ area: '関内', atmosphere: '静か' }
+  T->>DB: SELECT * FROM restaurants<br/>WHERE area LIKE ? AND atmosphere LIKE ?
+  DB-->>T: rows[]
+  T-->>L: { restaurants: [...] }
+  L-->>P: message.parts に<br/>tool-search_restaurants part
+  P->>V: restaurants を渡す
+  V-->>U: &lt;RestaurantCard /&gt; を並べて描画
+```
 
 ポイント: LLM は「どのコンポーネントを使うか」を tool 名で表明している（`search_restaurants` → 自動的にカード）。コンポーネントの実装と props 形は完全に開発者の手中にある。
 
 ### Declarative
 
-最初の 3 ステップは Controlled と同じ (search_restaurants で D1 から候補取得)。続いて:
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant L as LLM
+  participant T1 as search_restaurants
+  participant DB as D1
+  participant T2 as render_ui<br/>(echo back)
+  participant P as PartView
+  participant V as &lt;DeclarativeView /&gt;
 
-- LLM が **2 つ目のツール** `render_ui` を呼ぶ。引数として **Section / Card プリミティブを組み合わせた JSON ツリー** を渡す
-- `render_ui` の execute は引数をそのまま返すだけ (echo back)。意味は「LLM の UI 構成意図をクライアントに届ける」こと
-- クライアントの PartView が `tool-render_ui` を検出 → `<DeclarativeView ui={...} />` を再帰描画
+  U->>L: 「関内で静かに飲みたい」
+  L->>T1: tool call
+  T1->>DB: SELECT ...
+  DB-->>T1: rows[]
+  T1-->>L: { restaurants: [...] }
+  L->>T2: tool call<br/>{ sections: [{ heading, cards: [...] }] }<br/>(Section/Card プリミティブで組立)
+  T2-->>L: 入力をそのまま返す<br/>(echo back)
+  L-->>P: tool-render_ui part
+  P->>V: ui ツリーを渡す
+  V-->>U: Section / Card を再帰描画
+```
 
 ポイント: LLM は語彙 (`Card` / `Section`) の中で**自由に配置**できる。開発者は語彙とそのスキーマ (Zod, src/schemas/declarative.ts) を定義しただけ。
 
 ### Open-Ended
 
-最初の 3 ステップは同じ。続いて:
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant L as LLM
+  participant T1 as search_restaurants
+  participant DB as D1
+  participant T2 as render_html<br/>(echo back)
+  participant P as PartView
+  participant I as &lt;OpenEndedView /&gt;<br/>(iframe sandbox + CSP)
 
-- LLM が `render_html` ツールを呼び、**完全な HTML 文書**を引数で渡す (`<html>` から `</html>` まで CSS/JS 含む)
-- クライアントが `<OpenEndedView html={...} />` で iframe に流し込み
-- `<iframe sandbox="allow-scripts" srcDoc>` + `<meta http-equiv="Content-Security-Policy" content="connect-src 'none'; ...">` で隔離実行
+  U->>L: 「関内で静かに飲みたい」
+  L->>T1: tool call
+  T1->>DB: SELECT ...
+  DB-->>T1: rows[]
+  T1-->>L: { restaurants: [...] }
+  L->>T2: tool call<br/>{ html: '&lt;!doctype html&gt;...&lt;/html&gt;' }<br/>(完全な HTML 文書を生成)
+  T2-->>L: 入力をそのまま返す<br/>(echo back)
+  L-->>P: tool-render_html part
+  P->>I: html を srcDoc に注入
+  I-->>U: iframe (allow-scripts + CSP) 内で実行
+```
 
 ポイント: 描画の自由度は最大。開発者は CSP の許可リストだけ書いている。
 
