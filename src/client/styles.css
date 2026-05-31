@@ -1,0 +1,221 @@
+:root {
+  --bg: #0f1117;
+  --surface: #161922;
+  --surface-2: #1d2230;
+  --border: #2a3040;
+  --text: #e6e8ee;
+  --text-muted: #8a92a6;
+  --accent: #6366f1;
+  --accent-hover: #7c7ff5;
+  --user-bg: #2a3040;
+  --assistant-bg: #1d2230;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  height: 100vh;
+}
+
+.sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sidebar__header {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sidebar__new {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  text-align: left;
+}
+.sidebar__new:hover {
+  background: var(--border);
+}
+
+.sidebar__sessions {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sidebar__session {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.sidebar__session--active {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.chat__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.chat__title {
+  font-weight: 600;
+  font-size: 16px;
+}
+.chat__status {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+
+.chat__messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.chat__empty {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin: auto;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 720px;
+}
+.message[data-role="user"] {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+.message__role {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.message__body {
+  background: var(--assistant-bg);
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.message[data-role="user"] .message__body {
+  background: var(--user-bg);
+}
+
+.chat__form {
+  border-top: 1px solid var(--border);
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mode-selector {
+  display: inline-flex;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2px;
+  width: fit-content;
+}
+.mode-selector__option {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+.mode-selector__option[data-active="true"] {
+  background: var(--accent);
+  color: white;
+}
+
+.chat__input-row {
+  display: flex;
+  gap: 8px;
+}
+.chat__input {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+}
+.chat__input:focus {
+  border-color: var(--accent);
+}
+.chat__send {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+.chat__send:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.chat__send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

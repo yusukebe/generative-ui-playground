@@ -1,12 +1,10 @@
 import { Hono } from 'hono'
-import { renderer } from './renderer'
+import { agentsMiddleware } from 'hono-agents'
 
-const app = new Hono()
+export { RestaurantAgent } from './agent'
 
-app.use(renderer)
+const app = new Hono<{ Bindings: CloudflareBindings }>()
 
-app.get('/', (c) => {
-  return c.render(<h1>Hello!</h1>)
-})
+app.use('/agents/*', agentsMiddleware())
 
 export default app

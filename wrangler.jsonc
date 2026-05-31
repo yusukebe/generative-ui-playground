@@ -1,6 +1,28 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "generative-ui-playground",
+  "main": "./src/index.tsx",
   "compatibility_date": "2025-08-03",
-  "main": "./src/index.tsx"
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist/client",
+    "not_found_handling": "single-page-application"
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "RestaurantAgent",
+        "class_name": "RestaurantAgent"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["RestaurantAgent"]
+    }
+  ]
 }
