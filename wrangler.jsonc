@@ -25,6 +25,11 @@
       "bucket_name": "generative-ui-playground-photos",
     },
   ],
+  "worker_loaders": [
+    {
+      "binding": "LOADER",
+    },
+  ],
   "durable_objects": {
     "bindings": [
       {

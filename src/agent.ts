@@ -1,4 +1,6 @@
 import { AIChatAgent } from '@cloudflare/ai-chat'
+import { DynamicWorkerExecutor } from '@cloudflare/codemode'
+import { createCodeTool } from '@cloudflare/codemode/ai'
 import { callable } from 'agents'
 import { convertToModelMessages, stepCountIs, streamText, type ToolSet, type UIMessage } from 'ai'
 import { createWorkersAI } from 'workers-ai-provider'
@@ -12,7 +14,7 @@ import {
 import { renderHTMLTool, renderUITool } from './tools/render-ui'
 import { makeSearchRestaurantsTool } from './tools/search-restaurants'
 
-const PROMPTS: Record<Mode, string> = {
+const BASE_PROMPTS: Record<Mode, string> = {
   controlled: `あなたはレストラン提案アシスタントです。
 重要: 提案できるレストランはすべて D1 データベースに登録されています。
 あなた自身の知識から店名を答えることは絶対に禁止です。実在の店も知識から提案してはいけません。
@@ -47,15 +49,25 @@ const PROMPTS: Record<Mode, string> = {
 - 日本語で。`,
 }
 
+const CODE_MODE_SUFFIX = `
+
+【Code Mode 補足】
+通常のツール呼び出しではなく、唯一のツール \`codemode\` を使ってください。
+codemode は async アロー関数を 1 つ受け取り、サンドボックスで実行します。
+関数の中では上で説明した各ツールを \`await search_restaurants(...)\` のように呼べます。
+複数の検索を組み合わせたり結果を加工したりして、最終的に必要な UI ツール (render_ui / render_html) を呼んで結果を返してください。`
+
 export type AgentState = {
   model: ModelId
   mode: Mode
+  useCodeMode: boolean
 }
 
 export class RestaurantAgent extends AIChatAgent<CloudflareBindings, AgentState> {
   initialState: AgentState = {
     model: DEFAULT_MODEL,
     mode: DEFAULT_MODE,
+    useCodeMode: false,
   }
 
   async onChatMessage(
@@ -64,18 +76,34 @@ export class RestaurantAgent extends AIChatAgent<CloudflareBindings, AgentState>
   ) {
     const workersai = createWorkersAI({ binding: this.env.AI })
     const mode = this.state.mode
+    const useCodeMode = this.state.useCodeMode
 
+    // mode → ツール集合
     const searchTool = makeSearchRestaurantsTool(this.env.DB)
-    const tools: ToolSet =
-      mode === 'controlled'
-        ? { search_restaurants: searchTool }
-        : mode === 'declarative'
-          ? { search_restaurants: searchTool, render_ui: renderUITool }
-          : { search_restaurants: searchTool, render_html: renderHTMLTool }
+    let baseTools: ToolSet
+    if (mode === 'controlled') {
+      baseTools = { search_restaurants: searchTool }
+    } else if (mode === 'declarative') {
+      baseTools = { search_restaurants: searchTool, render_ui: renderUITool }
+    } else {
+      baseTools = { search_restaurants: searchTool, render_html: renderHTMLTool }
+    }
+
+    // useCodeMode が ON ならツール群を codemode でラップ
+    const tools: ToolSet = useCodeMode
+      ? {
+          codemode: createCodeTool({
+            tools: baseTools,
+            executor: new DynamicWorkerExecutor({ loader: this.env.LOADER }),
+          }),
+        }
+      : baseTools
+
+    const system = BASE_PROMPTS[mode] + (useCodeMode ? CODE_MODE_SUFFIX : '')
 
     const result = streamText({
       model: workersai(this.state.model),
-      system: PROMPTS[mode],
+      system,
       messages: await convertToModelMessages(this.messages),
       tools,
       stopWhen: stepCountIs(5),

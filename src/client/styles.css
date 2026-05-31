@@ -212,6 +212,61 @@ body,
   gap: 12px;
 }
 
+.chat__controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.code-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+.code-mode-toggle:has(input:checked) {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.code-mode-toggle input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.codemode {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.codemode__code {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.codemode__code summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.codemode__code pre {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--text);
+}
+
 .mode-selector {
   display: inline-flex;
   background: var(--surface-2);

@@ -12,7 +12,7 @@ import { RestaurantList } from './components/restaurant/RestaurantList'
 import { DeclarativeView } from './modes/DeclarativeView'
 import { OpenEndedView } from './modes/OpenEndedView'
 
-type AgentSyncState = { model: ModelId; mode: Mode }
+type AgentSyncState = { model: ModelId; mode: Mode; useCodeMode: boolean }
 
 function fileToDataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -26,6 +26,7 @@ function fileToDataURL(file: File): Promise<string> {
 export function Chat() {
   const [mode, setMode] = useState<Mode>(DEFAULT_MODE)
   const [model, setModel] = useState<ModelId>(DEFAULT_MODEL)
+  const [useCodeMode, setUseCodeMode] = useState<boolean>(false)
 
   const agent = useAgent<typeof RestaurantAgent>({
     agent: 'RestaurantAgent',
@@ -33,6 +34,7 @@ export function Chat() {
     onStateUpdate: ((state: AgentSyncState) => {
       if (state?.model) setModel(state.model)
       if (state?.mode) setMode(state.mode)
+      if (typeof state?.useCodeMode === 'boolean') setUseCodeMode(state.useCodeMode)
     }) as never,
   })
 
@@ -97,12 +99,18 @@ export function Chat() {
 
   const handleModelChange = (id: ModelId) => {
     setModel(id)
-    setAgentState({ model: id, mode })
+    setAgentState({ model: id, mode, useCodeMode })
   }
 
   const handleModeChange = (m: Mode) => {
     setMode(m)
-    setAgentState({ model, mode: m })
+    setAgentState({ model, mode: m, useCodeMode })
+  }
+
+  const handleCodeModeToggle = () => {
+    const next = !useCodeMode
+    setUseCodeMode(next)
+    setAgentState({ model, mode, useCodeMode: next })
   }
 
   const handleFile = (file: File | null) => {
@@ -169,7 +177,16 @@ export function Chat() {
       </div>
 
       <form className='chat__form' onSubmit={handleSubmit}>
-        <ModeSelector value={mode} onChange={handleModeChange} />
+        <div className='chat__controls'>
+          <ModeSelector value={mode} onChange={handleModeChange} />
+          <label
+            className='code-mode-toggle'
+            title='LLM がコードを書いて tool 群を呼ぶ (experimental)'
+          >
+            <input type='checkbox' checked={useCodeMode} onChange={handleCodeModeToggle} />
+            <span>Code Mode</span>
+          </label>
+        </div>
         {imagePreview && (
           <div className='image-preview'>
             <img src={imagePreview} alt='登録予定' />
@@ -262,6 +279,44 @@ type MessagePart =
   | ToolPart
   | { type: string; [k: string]: unknown }
 
+function CodeModeView({ part }: { part: ToolPart }) {
+  const input = part.input as { code?: string } | undefined
+  const output = part.output
+  const code = input?.code
+
+  // output が render_ui / render_html / restaurants の形なら認識して描画
+  let body: React.ReactNode = (
+    <details className='tool-result'>
+      <summary>実行結果</summary>
+      <pre>{JSON.stringify(output, null, 2)}</pre>
+    </details>
+  )
+  if (output && typeof output === 'object') {
+    const o = output as Record<string, unknown>
+    if (Array.isArray((o as { restaurants?: unknown }).restaurants)) {
+      body = <RestaurantList restaurants={(o as { restaurants: Restaurant[] }).restaurants} />
+    } else if (Array.isArray((o as { sections?: unknown }).sections)) {
+      body = <DeclarativeView ui={o as DeclarativeUI} />
+    } else if (typeof (o as { html?: unknown }).html === 'string') {
+      body = <OpenEndedView html={(o as { html: string }).html} />
+    }
+  }
+
+  return (
+    <div className='codemode'>
+      {code && (
+        <details className='codemode__code' open>
+          <summary>🧠 Agent が生成したコード</summary>
+          <pre>
+            <code>{code}</code>
+          </pre>
+        </details>
+      )}
+      {body}
+    </div>
+  )
+}
+
 function PartView({ part }: { part: MessagePart }) {
   if (part.type === 'text') {
     return <span className='part-text'>{(part as { text: string }).text}</span>
@@ -300,6 +355,7 @@ function PartView({ part }: { part: MessagePart }) {
         const output = tp.output as { html?: string } | undefined
         if (output?.html) return <OpenEndedView html={output.html} />
       }
+      if (toolName === 'codemode') return <CodeModeView part={tp} />
       return (
         <details className='tool-result'>
           <summary>{toolName} の結果</summary>
