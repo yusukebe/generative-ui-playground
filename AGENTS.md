@@ -170,3 +170,28 @@ Chrome DevTools MCP からの主な利用:
 7. 住所正規化は Google Places API、画像は Workers AI Vision で解析
 8. Open-Ended は iframe sandbox + CSP
 9. デバグは Chrome DevTools MCP
+10. 「主要モデルから選べると面白い」要望 → ModelSelector を追加 (Llama 4 Scout / Llama 3.3 70B / Llama 3.1 8B / Gemma 3 / Qwen 2.5 Coder)
+11. hono-agents を導入し、`/agents/*` ルーティングを `agentsMiddleware` 経由に
+12. 型は `CloudflareBindings` で統一 (`Env` は使わない)
+
+## 現在の実装ステータス (2026-05-31 時点)
+
+### 完了
+- ✅ React 19 SPA + Vite + Hono + Cloudflare Agents SDK の足場
+- ✅ ModelSelector (5 モデル) + ModeSelector (3 バンド)
+- ✅ D1 (restaurants) + R2 (PHOTOS) バインド、18 件シードデータ
+- ✅ `search_restaurants` ツール (D1 を area/genre/atmosphere/query で検索)
+- ✅ Controlled モード: tool call → RestaurantList の dispatch
+- ✅ Declarative モード: `render_ui` ツール + Section/Card プリミティブ
+- ✅ Open-Ended モード: `render_html` ツール + iframe sandbox + CSP
+- ✅ モード切替は Agent state 経由で双方向同期 (`state.mode`)
+- ✅ `@callable registerRestaurant`: 画像 DnD → Vision + 正規化 → D1+R2 → saveMessages
+- ✅ 型チェック (`tsc --noEmit`) と本番ビルド (`vite build`) が通る
+
+### 未完了 / 要対応
+- ⚠️ **Google Places API**: API キー未設定のため住所/座標は `null`。`wrangler secret put GOOGLE_PLACES_API_KEY` を実行し、`src/tools/add-restaurant.ts` の Places 呼び出し部分を埋める必要あり
+- ⚠️ **D1 リモートデプロイ**: `wrangler.jsonc` の `database_id: "local"` を実際の DB ID に置き換える必要あり (`wrangler d1 create generative-ui-playground` で取得)
+- ⚠️ **R2 バケット作成**: `wrangler r2 bucket create generative-ui-playground-photos`
+- ⚠️ **本番デプロイ未検証**: `bun run deploy` をまだ試していない
+- ⚠️ **エンドツーエンドの動作確認**: Workers AI を叩いて 3 モードそれぞれが期待通りに UI を生成するか、リハーサルで確認が必要
+- ⚠️ **スタイリング磨き込み**: 「あとで」となっている。3 モードの視覚的な差別化はさらに強化できる余地あり (登壇前)
