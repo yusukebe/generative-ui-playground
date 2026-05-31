@@ -359,23 +359,6 @@ function CodeModeView({ part }: { part: ToolPart }) {
   }
   const actual = peel(output)
 
-  let body: React.ReactNode = (
-    <details className='tool-result'>
-      <summary>実行結果 (生データ)</summary>
-      <pre>{JSON.stringify(output, null, 2)}</pre>
-    </details>
-  )
-  if (actual && typeof actual === 'object') {
-    const o = actual as Record<string, unknown>
-    if (Array.isArray((o as { restaurants?: unknown }).restaurants)) {
-      body = <RestaurantList restaurants={(o as { restaurants: Restaurant[] }).restaurants} />
-    } else if (Array.isArray((o as { sections?: unknown }).sections)) {
-      body = <DeclarativeView ui={o as DeclarativeUI} />
-    } else if (typeof (o as { html?: unknown }).html === 'string') {
-      body = <OpenEndedView html={(o as { html: string }).html} />
-    }
-  }
-
   return (
     <div className='codemode'>
       {code && (
@@ -386,8 +369,76 @@ function CodeModeView({ part }: { part: ToolPart }) {
           </pre>
         </details>
       )}
-      {body}
+      <CodeModeOutput output={actual} />
     </div>
+  )
+}
+
+/**
+ * 擬似 Response { contentType, body } をクライアント側で「描画」する。
+ * Content-Type ベースで描画ロジックを分岐する (Spectrum 3 バンドに対応)。
+ */
+function CodeModeOutput({ output }: { output: unknown }) {
+  // 旧形式 (Content-Type が無く直接 restaurants/sections/html を持つケース) の後方互換
+  if (output && typeof output === 'object') {
+    const o = output as Record<string, unknown>
+    if (typeof o.contentType === 'string' && typeof o.body === 'string') {
+      return <ResponseView contentType={o.contentType} body={o.body} />
+    }
+    if (Array.isArray(o.restaurants)) {
+      return <RestaurantList restaurants={o.restaurants as Restaurant[]} />
+    }
+    if (Array.isArray(o.sections)) {
+      return <DeclarativeView ui={o as DeclarativeUI} />
+    }
+    if (typeof o.html === 'string') {
+      return <OpenEndedView html={o.html} />
+    }
+  }
+
+  return (
+    <details className='tool-result'>
+      <summary>実行結果 (生データ)</summary>
+      <pre>{JSON.stringify(output, null, 2)}</pre>
+    </details>
+  )
+}
+
+function ResponseView({ contentType, body }: { contentType: string; body: string }) {
+  const ct = contentType.toLowerCase()
+  // text/html → iframe
+  if (ct.startsWith('text/html')) {
+    return <OpenEndedView html={body} />
+  }
+  // application/vnd.gui-tree+json → DeclarativeView
+  if (ct.includes('gui-tree') || ct.includes('declarative')) {
+    try {
+      const ui = JSON.parse(body) as DeclarativeUI
+      return <DeclarativeView ui={ui} />
+    } catch {
+      /* fall through */
+    }
+  }
+  // application/json → restaurants なら RestaurantList、sections なら DeclarativeView
+  if (ct.includes('json')) {
+    try {
+      const data = JSON.parse(body) as Record<string, unknown>
+      if (Array.isArray(data.restaurants)) {
+        return <RestaurantList restaurants={data.restaurants as Restaurant[]} />
+      }
+      if (Array.isArray(data.sections)) {
+        return <DeclarativeView ui={data as unknown as DeclarativeUI} />
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  // 認識できない場合は raw 表示
+  return (
+    <details className='tool-result'>
+      <summary>{contentType}</summary>
+      <pre>{body}</pre>
+    </details>
   )
 }
 

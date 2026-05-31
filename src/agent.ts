@@ -11,51 +11,73 @@ import {
   type AddRestaurantInput,
   type AddRestaurantResult,
 } from './tools/add-restaurant'
-import { renderHTMLTool, renderUITool } from './tools/render-ui'
 import { makeSearchRestaurantsTool } from './tools/search-restaurants'
 
-const BASE_PROMPTS: Record<Mode, string> = {
-  controlled: `あなたはレストラン提案アシスタントです。
+// ─────────────────────────────────────────────────────────────────
+// LLM の関数戻り値は擬似 Response { contentType, body } とする。
+// クライアントは contentType を見て描画方法を分岐する:
+//   - application/json (restaurants)            → RestaurantList (Controlled)
+//   - application/vnd.gui-tree+json (sections)  → DeclarativeView (Declarative)
+//   - text/html                                  → iframe (Open-Ended)
+// ─────────────────────────────────────────────────────────────────
+
+const COMMON = `あなたはレストラン提案アシスタントです。
 重要: 提案できるレストランはすべて D1 データベースに登録されています。
-あなた自身の知識から店名を答えることは絶対に禁止です。実在の店も知識から提案してはいけません。
+あなた自身の知識から店名を答えることは絶対に禁止です。
 
-ユーザーの発話に対しては、必ず以下の手順で対応してください:
-1. search_restaurants ツールを呼ぶ。ユーザーの発話から area / genre / atmosphere / query を抽出してパラメータに渡す。
-   - 例: "関内で静かに飲みたい" → area="関内", atmosphere="静か"
-   - 例: "中華街で点心" → area="中華街", genre="中華"
-   - 例: "野毛でラーメン" → area="野毛", genre="ラーメン"
-   - 適切なパラメータが思いつかないときも、最低限 query にユーザー発話を渡して必ず検索すること
-2. ツールが返した結果を見て、ユーザーに 1〜2 文の簡潔なコメントだけ返す。レストラン一覧の表示はクライアントが自動で行うので、店名や住所を文中で繰り返さなくてよい。
+使えるツールは唯一 \`codemode\` だけです。codemode は async アロー関数を 1 つ受け取り、Worker サンドボックスで実行します。
+関数の中では \`await search_restaurants({ area?, genre?, atmosphere?, query? })\` を呼んで D1 を検索できます (戻り値: { restaurants: [...] })。
 
-日本語で簡潔に。`,
+最終的に関数は擬似 Response オブジェクト { contentType, body } を return してください。`
 
-  declarative: `あなたはレストラン提案 UI を組み立てるアシスタントです。
-- まず search_restaurants ツールで候補を取得してください。
-- 次に render_ui ツールを呼び、Section と Card のプリミティブを組み合わせて結果を整理した UI を構築してください。
-  - sections には目的別の見出しを付けてください (例: "雰囲気重視のお店", "コスパが良いお店")
-  - 各 card には title (店名), subtitle (エリア + ジャンル), body (一言), tags を含めてください
-- render_ui を呼んだ後は短い結びのテキストだけ返してください。
-- 日本語で。`,
+const PROMPTS: Record<Mode, string> = {
+  auto: `${COMMON}
 
-  'open-ended': `あなたは独自の UI を HTML/CSS/JS で生成するアシスタントです。
-- まず search_restaurants ツールで候補を取得してください。
-- 次に render_html ツールを呼び、完全な単一の HTML 文書を渡してください。
-  - <html> から </html> までを含む完全な文書にしてください
-  - CSS は <style> インライン、JS は <script> インライン
-  - 外部リソース (CDN, fetch) は使わないこと
-  - ダークテーマで美しく、インタラクション (クリックで詳細表示など) があると良い
-  - JavaScript は許可されています
-- render_html の後は短い結びのテキストだけ返してください。
-- 日本語で。`,
+【Auto モード】ユーザの要望に応じて、最適な contentType を **あなた自身が選択**してください:
+- シンプルにお店を並べて見せたい → contentType: 'application/json', body: JSON.stringify({ restaurants: [...] })
+- 目的別に整理したい           → contentType: 'application/vnd.gui-tree+json', body: JSON.stringify({ sections: [{ heading, cards: [{ title, subtitle, body, tags }] }] })
+- 凝った見た目で見せたい (地図・グラフ等) → contentType: 'text/html', body: '<!doctype html>...'
+
+日本語で。`,
+
+  controlled: `${COMMON}
+
+【Controlled モード】必ず以下の形を返してください:
+contentType: 'application/json'
+body: JSON.stringify({ restaurants: [...search_restaurants の結果をそのまま] })
+
+日本語で。`,
+
+  declarative: `${COMMON}
+
+【Declarative モード】必ず以下の形を返してください:
+contentType: 'application/vnd.gui-tree+json'
+body: JSON.stringify({
+  title?: string,
+  intro?: string,
+  sections: [{
+    heading?: string,
+    description?: string,
+    cards: [{ type: 'Card', title, subtitle?, body?, tags?: string[], variant?: 'default'|'highlight' }]
+  }]
+})
+
+- sections には目的別の見出しを付けてください (例: "雰囲気重視のお店", "コスパが良いお店")
+- 各 card には title (店名), subtitle (エリア + ジャンル), body (一言), tags を含めてください
+
+日本語で。`,
+
+  'open-ended': `${COMMON}
+
+【Open-Ended モード】必ず以下の形を返してください:
+contentType: 'text/html'
+body: 完全な単一の HTML 文書 ('<!doctype html>' から '</html>' まで)
+- CSS は <style> インライン、JS は <script> インライン
+- 外部リソース (CDN, fetch) は禁止 (CSP でブロックされる)
+- ダークテーマで美しく、クリックなどのインタラクションがあると良い
+
+日本語で。`,
 }
-
-const CODE_MODE_SUFFIX = `
-
-【Code Mode 補足】
-あなたが使えるツールは唯一 \`codemode\` だけです。
-codemode は async アロー関数を 1 つ受け取り、サンドボックスで実行します。
-関数の中では上で説明した各ツールを \`await search_restaurants(...)\` のように呼べます。
-複数の検索を組み合わせたり結果を加工したりして、最終的に必要な UI ツール (render_ui / render_html) を呼んで結果を返してください。`
 
 export type AgentState = {
   model: ModelId
@@ -75,38 +97,24 @@ export class RestaurantAgent extends AIChatAgent<CloudflareBindings, AgentState>
     const workersai = createWorkersAI({ binding: this.env.AI })
     const mode = this.state.mode
 
-    // mode → ツール集合
     const searchTool = makeSearchRestaurantsTool(this.env.DB)
-    let baseTools: ToolSet
-    if (mode === 'controlled') {
-      baseTools = { search_restaurants: searchTool }
-    } else if (mode === 'declarative') {
-      baseTools = { search_restaurants: searchTool, render_ui: renderUITool }
-    } else {
-      baseTools = { search_restaurants: searchTool, render_html: renderHTMLTool }
-    }
-
-    // Code Mode を常時 ON: 各 mode のツール群を codemode でラップ
     const tools: ToolSet = {
       codemode: createCodeTool({
-        tools: baseTools,
+        tools: { search_restaurants: searchTool },
         executor: new DynamicWorkerExecutor({ loader: this.env.LOADER }),
       }),
     }
 
-    const system = BASE_PROMPTS[mode] + CODE_MODE_SUFFIX
-
     const result = streamText({
       model: workersai(this.state.model),
-      system,
+      system: PROMPTS[mode],
       messages: await convertToModelMessages(this.messages),
       tools,
       stopWhen: stepCountIs(5),
-      // Open-Ended は HTML 文書を丸ごと吐くのでトークン量が多い。
-      // Declarative も JSON ツリーを出力するため、余裕を持って大きめに。
       providerOptions: {
         'workers-ai': {
-          max_tokens: mode === 'open-ended' ? 8192 : 4096,
+          // Open-Ended と Auto は HTML 文書を吐くかもしれないので大きめに
+          max_tokens: mode === 'open-ended' || mode === 'auto' ? 8192 : 4096,
         },
       },
       abortSignal: options?.abortSignal,
