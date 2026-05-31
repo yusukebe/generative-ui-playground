@@ -18,6 +18,25 @@
 
 > 「これが未来です」がかっこいい着地。
 
+### 別フレーミング: 「LLM が書く SSR / JIT SSR」
+
+このデモの仕組みは本質的に **サーバーサイドレンダリング**そのもの。違うのは「誰が書いたか」:
+
+```
+通常の SSR (Next.js / Remix):
+  開発者が書いた React コンポーネント → サーバで renderToString → HTML
+
+このデモの SSR:
+  LLM が書いた React コンポーネント → Dynamic Worker で renderToString → HTML
+            ↑ リクエスト時に動的生成 (JIT)
+```
+
+- **コンポーネントがリクエスト時に LLM から動的生成される** (JIT)
+- 実行環境はリクエストごとに**隔離 Worker がスピンアップ**する
+- 出力は普通の React renderToString が吐く HTML 文字列
+
+つまり「**Code Mode + Dynamic Worker = LLM SSR の実装基盤**」と一発で説明できる。Spectrum 議論はこの上に乗る枝葉、というフレームも成立する。
+
 ## 中核アイデア (2026-05-31 大改修後)
 
 **LLM がコードを書く → Dynamic Worker で実行 → Response を返す**、を主軸とした **Code Mode + React** の単一プラットフォーム上で、LLM が状況に応じて Spectrum 上を歩く。
