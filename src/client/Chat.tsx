@@ -2,17 +2,14 @@ import { useAgentChat } from '@cloudflare/ai-chat/react'
 import { useAgent } from 'agents/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { RestaurantAgent } from '../agent'
-import { DEFAULT_MODE, type Mode } from '../modes'
 import { DEFAULT_MODEL, type ModelId } from '../models'
 import type { DeclarativeUI } from '../schemas/declarative'
-import type { Restaurant } from '../types'
+import { RestaurantList, type Restaurant } from '../ui-components'
 import { ModelSelector } from './ModelSelector'
-import { ModeSelector } from './ModeSelector'
-import { RestaurantList } from './components/restaurant/RestaurantList'
 import { DeclarativeView } from './modes/DeclarativeView'
 import { OpenEndedView } from './modes/OpenEndedView'
 
-type AgentSyncState = { model: ModelId; mode: Mode }
+type AgentSyncState = { model: ModelId }
 
 function fileToDataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -26,7 +23,6 @@ function fileToDataURL(file: File): Promise<string> {
 const ADMIN_TOKEN_KEY = 'generative-ui-playground:admin-token'
 
 export function Chat() {
-  const [mode, setMode] = useState<Mode>(DEFAULT_MODE)
   const [model, setModel] = useState<ModelId>(DEFAULT_MODEL)
   const [adminToken, setAdminToken] = useState<string | null>(() =>
     typeof window === 'undefined' ? null : localStorage.getItem(ADMIN_TOKEN_KEY)
@@ -38,7 +34,6 @@ export function Chat() {
     name: 'default',
     onStateUpdate: ((state: AgentSyncState) => {
       if (state?.model) setModel(state.model)
-      if (state?.mode) setMode(state.mode)
     }) as never,
   })
 
@@ -52,7 +47,6 @@ export function Chat() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
-  // 過去のユーザ発話を新しい順で
   const userHistory = useMemo(() => {
     const texts: string[] = []
     for (const m of messages) {
@@ -85,7 +79,6 @@ export function Chat() {
     if (isBusy) return
 
     if (imageFile) {
-      // 登録フロー (admin 限定)
       if (!isAdmin) return
       setIsRegistering(true)
       try {
@@ -133,12 +126,7 @@ export function Chat() {
 
   const handleModelChange = (id: ModelId) => {
     setModel(id)
-    setAgentState({ model: id, mode })
-  }
-
-  const handleModeChange = (m: Mode) => {
-    setMode(m)
-    setAgentState({ model, mode: m })
+    setAgentState({ model: id })
   }
 
   const handleFile = (file: File | null) => {
@@ -184,7 +172,6 @@ export function Chat() {
     >
       <header className='chat__header'>
         <span className='chat__title'>レストラン提案</span>
-        <ModeSelector value={mode} onChange={handleModeChange} />
         <div className='chat__header-right'>
           <ModelSelector value={model} onChange={handleModelChange} />
           <button
@@ -350,7 +337,6 @@ function CodeModeView({ part }: { part: ToolPart }) {
   const output = part.output
   const code = input?.code
 
-  // codemode は `{ result: ... }` で包んで返すことがあるので一段ほどく
   const peel = (v: unknown): unknown => {
     if (v && typeof v === 'object' && 'result' in v) {
       return (v as { result: unknown }).result
@@ -376,15 +362,15 @@ function CodeModeView({ part }: { part: ToolPart }) {
 
 /**
  * 擬似 Response { contentType, body } をクライアント側で「描画」する。
- * Content-Type ベースで描画ロジックを分岐する (Spectrum 3 バンドに対応)。
+ * Content-Type ベースで描画ロジックを分岐する。
  */
 function CodeModeOutput({ output }: { output: unknown }) {
-  // 旧形式 (Content-Type が無く直接 restaurants/sections/html を持つケース) の後方互換
   if (output && typeof output === 'object') {
     const o = output as Record<string, unknown>
     if (typeof o.contentType === 'string' && typeof o.body === 'string') {
       return <ResponseView contentType={o.contentType} body={o.body} />
     }
+    // 後方互換 (古いフォーマット)
     if (Array.isArray(o.restaurants)) {
       return <RestaurantList restaurants={o.restaurants as Restaurant[]} />
     }
@@ -406,11 +392,9 @@ function CodeModeOutput({ output }: { output: unknown }) {
 
 function ResponseView({ contentType, body }: { contentType: string; body: string }) {
   const ct = contentType.toLowerCase()
-  // text/html → iframe
   if (ct.startsWith('text/html')) {
     return <OpenEndedView html={body} />
   }
-  // application/vnd.gui-tree+json → DeclarativeView
   if (ct.includes('gui-tree') || ct.includes('declarative')) {
     try {
       const ui = JSON.parse(body) as DeclarativeUI
@@ -419,7 +403,6 @@ function ResponseView({ contentType, body }: { contentType: string; body: string
       /* fall through */
     }
   }
-  // application/json → restaurants なら RestaurantList、sections なら DeclarativeView
   if (ct.includes('json')) {
     try {
       const data = JSON.parse(body) as Record<string, unknown>
@@ -433,7 +416,6 @@ function ResponseView({ contentType, body }: { contentType: string; body: string
       /* fall through */
     }
   }
-  // 認識できない場合は raw 表示
   return (
     <details className='tool-result'>
       <summary>{contentType}</summary>
@@ -468,19 +450,12 @@ function PartView({ part }: { part: MessagePart }) {
       return <div className='tool-error'>ツールエラー: {tp.errorText ?? 'unknown'}</div>
     }
     if (tp.state === 'output-available') {
+      if (toolName === 'codemode') return <CodeModeView part={tp} />
+      // 直接的な search_restaurants 結果が直で返ってきた場合のフォールバック
       if (toolName === 'search_restaurants') {
         const output = tp.output as { restaurants?: Restaurant[] } | undefined
         if (output?.restaurants) return <RestaurantList restaurants={output.restaurants} />
       }
-      if (toolName === 'render_ui') {
-        const output = tp.output as DeclarativeUI | undefined
-        if (output) return <DeclarativeView ui={output} />
-      }
-      if (toolName === 'render_html') {
-        const output = tp.output as { html?: string } | undefined
-        if (output?.html) return <OpenEndedView html={output.html} />
-      }
-      if (toolName === 'codemode') return <CodeModeView part={tp} />
       return (
         <details className='tool-result'>
           <summary>{toolName} の結果</summary>

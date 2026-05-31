@@ -1,93 +1,61 @@
 import { AIChatAgent } from '@cloudflare/ai-chat'
-import { DynamicWorkerExecutor } from '@cloudflare/codemode'
-import { createCodeTool } from '@cloudflare/codemode/ai'
 import { callable } from 'agents'
 import { convertToModelMessages, stepCountIs, streamText, type ToolSet, type UIMessage } from 'ai'
 import { createWorkersAI } from 'workers-ai-provider'
-import { DEFAULT_MODE, type Mode } from './modes'
 import { DEFAULT_MODEL, type ModelId } from './models'
 import {
   addRestaurant,
   type AddRestaurantInput,
   type AddRestaurantResult,
 } from './tools/add-restaurant'
+import { makeReactCodeTool } from './tools/code-mode-react'
 import { makeSearchRestaurantsTool } from './tools/search-restaurants'
 
 // ─────────────────────────────────────────────────────────────────
-// LLM の関数戻り値は擬似 Response { contentType, body } とする。
-// クライアントは contentType を見て描画方法を分岐する:
-//   - application/json (restaurants)            → RestaurantList (Controlled)
-//   - application/vnd.gui-tree+json (sections)  → DeclarativeView (Declarative)
-//   - text/html                                  → iframe (Open-Ended)
+// 単一のシステムプロンプト。LLM は唯一のツール codemode に JSX を含む
+// async アロー関数を渡し、Cloudflare Dynamic Worker サンドボックスで実行する。
+//
+// LLM の選択:
+//   - <RestaurantList /> を借りる (Controlled 寄り)
+//   - Section/Card プリミティブで JSON ツリーを返す (Declarative 寄り)
+//   - 自分で raw な JSX を書く (Open-Ended 寄り)
+//
+// クライアントは Content-Type で描画方法を切替える:
+//   - application/json (restaurants)            → RestaurantList
+//   - application/vnd.gui-tree+json (sections)  → DeclarativeView
+//   - text/html                                  → iframe + CSP
 // ─────────────────────────────────────────────────────────────────
 
-const COMMON = `あなたはレストラン提案アシスタントです。
-重要: 提案できるレストランはすべて D1 データベースに登録されています。
-あなた自身の知識から店名を答えることは絶対に禁止です。
+const SYSTEM_PROMPT = `あなたはレストラン提案アシスタントです。
 
-使えるツールは唯一 \`codemode\` だけです。codemode は async アロー関数を 1 つ受け取り、Worker サンドボックスで実行します。
-関数の中では \`await search_restaurants({ area?, genre?, atmosphere?, query? })\` を呼んで D1 を検索できます (戻り値: { restaurants: [...] })。
+# 重要なルール
+- 提案できるレストランはすべて D1 データベースに登録されています
+- あなた自身の知識から店名を答えることは絶対に禁止 (D1 に無いお店は存在しないものとして扱う)
 
-最終的に関数は擬似 Response オブジェクト { contentType, body } を return してください。`
+# 仕組み
+- 唯一のツール codemode に JSX を含む async アロー関数を渡してください
+- 関数は Cloudflare Dynamic Worker サンドボックスで実行されます
+- React (createElement / JSX), renderToString, 事前定義コンポーネント (<RestaurantCard/>, <RestaurantList/>) が import 不要で使えます
+- 最終的に擬似 Response { contentType, body } を return してください
+- クライアントは Content-Type を見て描画方法を切替えます
 
-const PROMPTS: Record<Mode, string> = {
-  auto: `${COMMON}
+# どう書くか (ユーザの要望に応じて自由に判断)
+- シンプルにお店を並べたい → <RestaurantList restaurants={...} /> を 1 個使うだけで OK
+- 凝った見た目で見せたい → 自分で <div> から組み立て、style を inline で書く
+- 構造化したい → { contentType: 'application/vnd.gui-tree+json', body: JSON.stringify({ sections: [...] }) } で Section/Card プリミティブのツリーを返す
 
-【Auto モード】ユーザの要望に応じて、最適な contentType を **あなた自身が選択**してください:
-- シンプルにお店を並べて見せたい → contentType: 'application/json', body: JSON.stringify({ restaurants: [...] })
-- 目的別に整理したい           → contentType: 'application/vnd.gui-tree+json', body: JSON.stringify({ sections: [{ heading, cards: [{ title, subtitle, body, tags }] }] })
-- 凝った見た目で見せたい (地図・グラフ等) → contentType: 'text/html', body: '<!doctype html>...'
-
-日本語で。`,
-
-  controlled: `${COMMON}
-
-【Controlled モード】必ず以下の形を返してください:
-contentType: 'application/json'
-body: JSON.stringify({ restaurants: [...search_restaurants の結果をそのまま] })
-
-日本語で。`,
-
-  declarative: `${COMMON}
-
-【Declarative モード】必ず以下の形を返してください:
-contentType: 'application/vnd.gui-tree+json'
-body: JSON.stringify({
-  title?: string,
-  intro?: string,
-  sections: [{
-    heading?: string,
-    description?: string,
-    cards: [{ type: 'Card', title, subtitle?, body?, tags?: string[], variant?: 'default'|'highlight' }]
-  }]
-})
-
-- sections には目的別の見出しを付けてください (例: "雰囲気重視のお店", "コスパが良いお店")
-- 各 card には title (店名), subtitle (エリア + ジャンル), body (一言), tags を含めてください
-
-日本語で。`,
-
-  'open-ended': `${COMMON}
-
-【Open-Ended モード】必ず以下の形を返してください:
-contentType: 'text/html'
-body: 完全な単一の HTML 文書 ('<!doctype html>' から '</html>' まで)
-- CSS は <style> インライン、JS は <script> インライン
-- 外部リソース (CDN, fetch) は禁止 (CSP でブロックされる)
-- ダークテーマで美しく、クリックなどのインタラクションがあると良い
-
-日本語で。`,
-}
+# 共通
+- search_restaurants ツールでユーザの発話から area/genre/atmosphere/query を抽出して D1 検索
+- 関数の最後に必ず { contentType, body } を return
+- 日本語で短い結びのテキストも添えてください`
 
 export type AgentState = {
   model: ModelId
-  mode: Mode
 }
 
 export class RestaurantAgent extends AIChatAgent<CloudflareBindings, AgentState> {
   initialState: AgentState = {
     model: DEFAULT_MODEL,
-    mode: DEFAULT_MODE,
   }
 
   async onChatMessage(
@@ -95,26 +63,23 @@ export class RestaurantAgent extends AIChatAgent<CloudflareBindings, AgentState>
     options?: { abortSignal?: AbortSignal }
   ) {
     const workersai = createWorkersAI({ binding: this.env.AI })
-    const mode = this.state.mode
 
     const searchTool = makeSearchRestaurantsTool(this.env.DB)
-    const tools: ToolSet = {
-      codemode: createCodeTool({
-        tools: { search_restaurants: searchTool },
-        executor: new DynamicWorkerExecutor({ loader: this.env.LOADER }),
-      }),
-    }
+    const codemode = await makeReactCodeTool({
+      tools: { search_restaurants: searchTool },
+      loader: this.env.LOADER,
+    })
+    const tools: ToolSet = { codemode }
 
     const result = streamText({
       model: workersai(this.state.model),
-      system: PROMPTS[mode],
+      system: SYSTEM_PROMPT,
       messages: await convertToModelMessages(this.messages),
       tools,
       stopWhen: stepCountIs(5),
       providerOptions: {
         'workers-ai': {
-          // Open-Ended と Auto は HTML 文書を吐くかもしれないので大きめに
-          max_tokens: mode === 'open-ended' || mode === 'auto' ? 8192 : 4096,
+          max_tokens: 8192,
         },
       },
       abortSignal: options?.abortSignal,
