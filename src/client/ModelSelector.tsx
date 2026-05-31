@@ -8,10 +8,10 @@ export function ModelSelector({
   onChange: (m: ModelId) => void
 }) {
   return (
-    <label className="model-selector">
-      <span className="model-selector__label">Model</span>
+    <label className='model-selector'>
+      <span className='model-selector__label'>Model</span>
       <select
-        className="model-selector__select"
+        className='model-selector__select'
         value={value}
         onChange={(e) => onChange(e.target.value as ModelId)}
       >

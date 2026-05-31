@@ -7,15 +7,12 @@ export const SearchInputSchema = z.object({
   area: z.string().optional().describe('エリア名 (例: 中目黒, 渋谷, 銀座)'),
   genre: z.string().optional().describe('ジャンル (例: ラーメン, イタリアン, 寿司, バー)'),
   atmosphere: z.string().optional().describe('雰囲気 (例: 静か, 賑やか, デート向き, 落ち着いた)'),
-  limit: z.number().min(1).max(10).default(5),
+  limit: z.coerce.number().min(1).max(10).default(5),
 })
 
 export type SearchInput = z.infer<typeof SearchInputSchema>
 
-export async function searchRestaurants(
-  db: D1Database,
-  input: SearchInput,
-): Promise<Restaurant[]> {
+export async function searchRestaurants(db: D1Database, input: SearchInput): Promise<Restaurant[]> {
   const conditions: string[] = []
   const params: unknown[] = []
 
@@ -41,7 +38,10 @@ export async function searchRestaurants(
   const sql = `SELECT * FROM restaurants ${where} ORDER BY created_at DESC LIMIT ?`
   params.push(input.limit)
 
-  const { results } = await db.prepare(sql).bind(...params).all<DbRestaurantRow>()
+  const { results } = await db
+    .prepare(sql)
+    .bind(...params)
+    .all<DbRestaurantRow>()
   return results.map(rowToRestaurant)
 }
 

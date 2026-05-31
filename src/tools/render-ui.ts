@@ -12,7 +12,9 @@ export const renderUITool = tool({
 export const renderHTMLInputSchema = z.object({
   html: z
     .string()
-    .describe('完全な独立 HTML 文書。<html> から </html> まで含め、CSS/JS は inline。外部リソースは禁止。'),
+    .describe(
+      '完全な独立 HTML 文書。<html> から </html> まで含め、CSS/JS は inline。外部リソースは禁止。'
+    ),
 })
 
 export const renderHTMLTool = tool({

@@ -9,14 +9,18 @@
   --accent-hover: #7c7ff5;
   --user-bg: #2a3040;
   --assistant-bg: #1d2230;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans', 'Noto Sans JP',
+    sans-serif;
 }
 
 * {
   box-sizing: border-box;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   margin: 0;
   background: var(--bg);
@@ -164,7 +168,7 @@ html, body, #root {
   gap: 4px;
   max-width: 720px;
 }
-.message[data-role="user"] {
+.message[data-role='user'] {
   align-self: flex-end;
   align-items: flex-end;
 }
@@ -182,7 +186,7 @@ html, body, #root {
   line-height: 1.6;
   white-space: pre-wrap;
 }
-.message[data-role="user"] .message__body {
+.message[data-role='user'] .message__body {
   background: var(--user-bg);
 }
 
@@ -212,7 +216,7 @@ html, body, #root {
   font-size: 13px;
   transition: all 0.15s;
 }
-.mode-selector__option[data-active="true"] {
+.mode-selector__option[data-active='true'] {
   background: var(--accent);
   color: white;
 }
@@ -415,7 +419,7 @@ html, body, #root {
   flex-direction: column;
   gap: 6px;
 }
-.decl-card[data-variant="highlight"] {
+.decl-card[data-variant='highlight'] {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent) inset;
 }
@@ -456,10 +460,10 @@ html, body, #root {
 }
 
 /* Drag & drop / image preview */
-.chat[data-drop-active="true"] {
+.chat[data-drop-active='true'] {
   position: relative;
 }
-.chat[data-drop-active="true"]::after {
+.chat[data-drop-active='true']::after {
   content: '';
   position: absolute;
   inset: 0;

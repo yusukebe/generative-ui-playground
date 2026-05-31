@@ -6,7 +6,7 @@
 
 ## 何のためのデモか
 
-- 前作 (前年同カンファレンス) は **MCP-UI** を紹介した。続編は **MCP Apps** への発展 *と* Generative UI 全般のメインストリーム化を扱う
+- 前作 (前年同カンファレンス) は **MCP-UI** を紹介した。続編は **MCP Apps** への発展 _と_ Generative UI 全般のメインストリーム化を扱う
 - 本デモは「Generative UI が一般化した時代の**設計選択肢**」を象徴的に示す装置。MCP Apps を直接ブリッジするものではなく、Spectrum という考え方を見せるためのもの
 - MCP Apps はトーク本編で語る — デモはあえて MCP に依存しない作りに保つ
 
@@ -14,11 +14,11 @@
 
 CopilotKit が提唱する 3 バンド ([原典](https://www.copilotkit.ai/generative-ui-spectrum))。本リポジトリでは同じプロンプトを 3 モードで投げ分けられる UI で実装する。
 
-| バンド | LLM 出力 | 描画ロジック | このリポでの位置 |
-|---|---|---|---|
-| **Controlled** | tool call で `{ component: "Name", props: {...} }` | 事前定義済み React コンポーネントを name で dispatch、Zod で props 検証 | `src/client/modes/ControlledView.tsx` + `src/client/components/restaurant/*` |
-| **Declarative** | JSON UI ツリー `{ type: "Card", children: [...] }` | プリミティブ語彙 (`Card` / `Section` / `Heading` / `Image` / `Tag` / `Button` / `List`) を Zod で定義、JSON を再帰的に React に変換 | `src/client/modes/DeclarativeView.tsx` + `src/client/components/primitives/*` |
-| **Open-Ended** | HTML + CSS + (inline) JS の文字列 | `<iframe sandbox="allow-scripts" srcdoc={...}>` + `<meta http-equiv="Content-Security-Policy" content="connect-src 'none'; ...">` で外部漏れ遮断しつつ実行 | `src/client/modes/OpenEndedView.tsx` |
+| バンド          | LLM 出力                                           | 描画ロジック                                                                                                                                               | このリポでの位置                                                              |
+| --------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| **Controlled**  | tool call で `{ component: "Name", props: {...} }` | 事前定義済み React コンポーネントを name で dispatch、Zod で props 検証                                                                                    | `src/client/modes/ControlledView.tsx` + `src/client/components/restaurant/*`  |
+| **Declarative** | JSON UI ツリー `{ type: "Card", children: [...] }` | プリミティブ語彙 (`Card` / `Section` / `Heading` / `Image` / `Tag` / `Button` / `List`) を Zod で定義、JSON を再帰的に React に変換                        | `src/client/modes/DeclarativeView.tsx` + `src/client/components/primitives/*` |
+| **Open-Ended**  | HTML + CSS + (inline) JS の文字列                  | `<iframe sandbox="allow-scripts" srcdoc={...}>` + `<meta http-equiv="Content-Security-Policy" content="connect-src 'none'; ...">` で外部漏れ遮断しつつ実行 | `src/client/modes/OpenEndedView.tsx`                                          |
 
 参考先行事例: [Zenn 記事 (peintangos)](https://zenn.dev/peintangos/articles/5b6e952c4e8880) — Next.js + LangGraph + Vercel AI SDK 構成。本リポジトリは Cloudflare 完結スタックで作り直す。
 
@@ -75,16 +75,16 @@ CopilotKit が提唱する 3 バンド ([原典](https://www.copilotkit.ai/gener
 
 ## 重要な設計判断と背景
 
-| 判断 | 理由 |
-|---|---|
-| **Cloudflare 完結** (Vercel/Next.js を使わない) | 登壇者が Hono 作者であり Cloudflare 主軸でデモを組みたい。登壇ストーリーの統一性 |
-| **モード切替はセグメントコントロール (タブではない)** | タブだと会話履歴が分断され、デモ中に「比較トーク」がしづらい |
-| **データソースは D1 + R2 (モック JSON ではない)** | 「ステージでライブ登録してデモする」をやるため。Agent state でなく永続層に置くのは、リハーサル分も次回まで残るから |
-| **住所正規化は Google Places API** | ユーザの判断「情報の出どころは最強でいい」。LLM 知識のみでは「ネット情報で正規化している感」が出ない |
-| **画像は Vision モデルでタグ化** | デモ価値が大きい。「LLM が写真を見て『台湾まぜそばっぽい』と判定」を見せられる |
-| **Open-Ended は iframe sandbox + CSP** | XSS とデータ漏洩を両方ケア。`sandbox="allow-scripts"` で JS は許可しないと「動く UI」感が出ない。`connect-src 'none'` で外部通信は遮断 |
-| **Open-Ended の Tailwind CDN は最初は許可しない** | CSP 緩和とビジュアル品質のトレードオフ。見栄えが厳しければ実装中に緩和を検討 |
-| **MCP Apps への接続はデモでは作らない** | トーク本編で語る話なので、デモではあえて切り離して Spectrum そのものに集中させる |
+| 判断                                                  | 理由                                                                                                                                   |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **Cloudflare 完結** (Vercel/Next.js を使わない)       | 登壇者が Hono 作者であり Cloudflare 主軸でデモを組みたい。登壇ストーリーの統一性                                                       |
+| **モード切替はセグメントコントロール (タブではない)** | タブだと会話履歴が分断され、デモ中に「比較トーク」がしづらい                                                                           |
+| **データソースは D1 + R2 (モック JSON ではない)**     | 「ステージでライブ登録してデモする」をやるため。Agent state でなく永続層に置くのは、リハーサル分も次回まで残るから                     |
+| **住所正規化は Google Places API**                    | ユーザの判断「情報の出どころは最強でいい」。LLM 知識のみでは「ネット情報で正規化している感」が出ない                                   |
+| **画像は Vision モデルでタグ化**                      | デモ価値が大きい。「LLM が写真を見て『台湾まぜそばっぽい』と判定」を見せられる                                                         |
+| **Open-Ended は iframe sandbox + CSP**                | XSS とデータ漏洩を両方ケア。`sandbox="allow-scripts"` で JS は許可しないと「動く UI」感が出ない。`connect-src 'none'` で外部通信は遮断 |
+| **Open-Ended の Tailwind CDN は最初は許可しない**     | CSP 緩和とビジュアル品質のトレードオフ。見栄えが厳しければ実装中に緩和を検討                                                           |
+| **MCP Apps への接続はデモでは作らない**               | トーク本編で語る話なので、デモではあえて切り離して Spectrum そのものに集中させる                                                       |
 
 ## ファイル構成
 
@@ -139,6 +139,7 @@ npm run deploy   # vite build + wrangler deploy
 ```
 
 Chrome DevTools MCP からの主な利用:
+
 - `list_network_requests` — WebSocket と外部通信の確認
 - `take_screenshot` — 3 モードのビジュアル差分確認
 - `list_console_messages` — エラー検出
@@ -177,6 +178,7 @@ Chrome DevTools MCP からの主な利用:
 ## 現在の実装ステータス (2026-05-31 時点)
 
 ### 完了
+
 - ✅ React 19 SPA + Vite + Hono + Cloudflare Agents SDK の足場
 - ✅ ModelSelector (5 モデル) + ModeSelector (3 バンド)
 - ✅ D1 (restaurants) + R2 (PHOTOS) バインド、18 件シードデータ
@@ -189,6 +191,7 @@ Chrome DevTools MCP からの主な利用:
 - ✅ 型チェック (`tsc --noEmit`) と本番ビルド (`vite build`) が通る
 
 ### 未完了 / 要対応
+
 - ⚠️ **Google Places API**: API キー未設定のため住所/座標は `null`。`wrangler secret put GOOGLE_PLACES_API_KEY` を実行し、`src/tools/add-restaurant.ts` の Places 呼び出し部分を埋める必要あり
 - ⚠️ **D1 リモートデプロイ**: `wrangler.jsonc` の `database_id: "local"` を実際の DB ID に置き換える必要あり (`wrangler d1 create generative-ui-playground` で取得)
 - ⚠️ **R2 バケット作成**: `wrangler r2 bucket create generative-ui-playground-photos`

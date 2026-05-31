@@ -6,11 +6,11 @@ CopilotKit が提唱する [**Generative UI Spectrum**](https://www.copilotkit.a
 
 ## 3 つのバンド
 
-| バンド | LLM 出力 | 描画 |
-| --- | --- | --- |
-| **Controlled** | tool call `{ component, props }` | 事前定義 React コンポーネントを dispatch |
-| **Declarative** | JSON UI ツリー | プリミティブ語彙を再帰的に組立 |
-| **Open-Ended** | HTML + CSS + JS | `<iframe sandbox>` + CSP で実行 |
+| バンド          | LLM 出力                         | 描画                                     |
+| --------------- | -------------------------------- | ---------------------------------------- |
+| **Controlled**  | tool call `{ component, props }` | 事前定義 React コンポーネントを dispatch |
+| **Declarative** | JSON UI ツリー                   | プリミティブ語彙を再帰的に組立           |
+| **Open-Ended**  | HTML + CSS + JS                  | `<iframe sandbox>` + CSP で実行          |
 
 並走サブテーマ: **「フォーム UI は消える」** — レストラン登録は専用フォームではなく、チャット入力 + 写真 DnD で行い、LLM が曖昧な自然言語入力を正規化する。
 

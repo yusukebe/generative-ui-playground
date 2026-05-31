@@ -29,29 +29,25 @@ export type AddRestaurantResult = {
   visionSummary?: string
 }
 
-async function describeImage(
-  ai: Ai,
-  imageDataUrl: string,
-): Promise<string> {
+async function describeImage(ai: Ai, imageDataUrl: string): Promise<string> {
   // data URL → base64 部分のみ
   const match = imageDataUrl.match(/^data:[^;]+;base64,(.+)$/)
   if (!match) return ''
   const base64 = match[1]
   const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
-  const result = (await ai.run(VISION_MODEL as keyof AiModels, {
-    image: Array.from(bytes),
-    prompt:
-      'この写真に写っている料理または店内の様子を 50 文字程度で簡潔に説明してください。日本語で。',
-    max_tokens: 200,
-  } as unknown as never)) as { description?: string; response?: string }
+  const result = (await ai.run(
+    VISION_MODEL as keyof AiModels,
+    {
+      image: Array.from(bytes),
+      prompt:
+        'この写真に写っている料理または店内の様子を 50 文字程度で簡潔に説明してください。日本語で。',
+      max_tokens: 200,
+    } as unknown as never
+  )) as { description?: string; response?: string }
   return result.description ?? result.response ?? ''
 }
 
-async function normalize(
-  ai: Ai,
-  userText: string,
-  visionSummary: string,
-): Promise<Normalized> {
+async function normalize(ai: Ai, userText: string, visionSummary: string): Promise<Normalized> {
   const workersai = createWorkersAI({ binding: ai })
   const { object } = await generateObject({
     model: workersai(NORMALIZE_MODEL),
@@ -68,11 +64,9 @@ async function normalize(
 
 export async function addRestaurant(
   env: CloudflareBindings,
-  input: AddRestaurantInput,
+  input: AddRestaurantInput
 ): Promise<AddRestaurantResult> {
-  const visionSummary = input.imageDataUrl
-    ? await describeImage(env.AI, input.imageDataUrl)
-    : ''
+  const visionSummary = input.imageDataUrl ? await describeImage(env.AI, input.imageDataUrl) : ''
   const normalized = await normalize(env.AI, input.text, visionSummary)
 
   let photoId: string | null = null
@@ -92,7 +86,7 @@ export async function addRestaurant(
   const createdAt = Date.now()
   await env.DB.prepare(
     `INSERT INTO restaurants (id, name, area, address, lat, lng, genre, tags, note, vision_summary, photo_id, price_range, atmosphere, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -108,7 +102,7 @@ export async function addRestaurant(
       photoId,
       normalized.price_range,
       normalized.atmosphere,
-      createdAt,
+      createdAt
     )
     .run()
 

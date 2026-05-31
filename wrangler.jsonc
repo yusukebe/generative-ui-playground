@@ -6,37 +6,37 @@
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "./dist/client",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
   },
   "ai": {
-    "binding": "AI"
+    "binding": "AI",
   },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "generative-ui-playground",
       "database_id": "local",
-      "migrations_dir": "migrations"
-    }
+      "migrations_dir": "migrations",
+    },
   ],
   "r2_buckets": [
     {
       "binding": "PHOTOS",
-      "bucket_name": "generative-ui-playground-photos"
-    }
+      "bucket_name": "generative-ui-playground-photos",
+    },
   ],
   "durable_objects": {
     "bindings": [
       {
         "name": "RestaurantAgent",
-        "class_name": "RestaurantAgent"
-      }
-    ]
+        "class_name": "RestaurantAgent",
+      },
+    ],
   },
   "migrations": [
     {
       "tag": "v1",
-      "new_sqlite_classes": ["RestaurantAgent"]
-    }
-  ]
+      "new_sqlite_classes": ["RestaurantAgent"],
+    },
+  ],
 }

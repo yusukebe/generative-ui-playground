@@ -4,7 +4,11 @@ import { convertToModelMessages, streamText, type ToolSet, type UIMessage } from
 import { createWorkersAI } from 'workers-ai-provider'
 import { DEFAULT_MODE, type Mode } from './modes'
 import { DEFAULT_MODEL, type ModelId } from './models'
-import { addRestaurant, type AddRestaurantInput, type AddRestaurantResult } from './tools/add-restaurant'
+import {
+  addRestaurant,
+  type AddRestaurantInput,
+  type AddRestaurantResult,
+} from './tools/add-restaurant'
 import { renderHTMLTool, renderUITool } from './tools/render-ui'
 import { makeSearchRestaurantsTool } from './tools/search-restaurants'
 
@@ -47,7 +51,7 @@ export class RestaurantAgent extends AIChatAgent<CloudflareBindings, AgentState>
 
   async onChatMessage(
     onFinish: Parameters<AIChatAgent<CloudflareBindings, AgentState>['onChatMessage']>[0],
-    options?: { abortSignal?: AbortSignal },
+    options?: { abortSignal?: AbortSignal }
   ) {
     const workersai = createWorkersAI({ binding: this.env.AI })
     const mode = this.state.mode

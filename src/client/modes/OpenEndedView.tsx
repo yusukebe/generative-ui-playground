@@ -2,8 +2,8 @@ const CSP =
   "default-src 'none'; " +
   "script-src 'unsafe-inline'; " +
   "style-src 'unsafe-inline'; " +
-  "img-src data:; " +
-  "font-src data:; " +
+  'img-src data:; ' +
+  'font-src data:; ' +
   "connect-src 'none'; " +
   "object-src 'none'; " +
   "base-uri 'none'; " +
@@ -23,10 +23,10 @@ function wrapHTML(html: string): string {
 export function OpenEndedView({ html }: { html: string }) {
   return (
     <iframe
-      className="open-ended"
-      sandbox="allow-scripts"
+      className='open-ended'
+      sandbox='allow-scripts'
       srcDoc={wrapHTML(html)}
-      title="Open-Ended generated UI"
+      title='Open-Ended generated UI'
     />
   )
 }

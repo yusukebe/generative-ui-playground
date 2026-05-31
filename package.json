@@ -8,7 +8,9 @@
     "deploy": "$npm_execpath run build && wrangler deploy",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
-    "db:migrate:remote": "wrangler d1 migrations apply DB --remote"
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "format": "prettier --check \"src/**/*.{ts,tsx,css}\" \"*.{ts,json,jsonc,md}\"",
+    "format:fix": "prettier --write \"src/**/*.{ts,tsx,css}\" \"*.{ts,json,jsonc,md}\""
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.195",
@@ -28,6 +30,7 @@
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
+    "prettier": "^3.8.3",
     "vite": "^8.0.14",
     "wrangler": "^4.17.0"
   }

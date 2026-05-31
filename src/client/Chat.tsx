@@ -120,7 +120,7 @@ export function Chat() {
 
   return (
     <div
-      className="chat"
+      className='chat'
       data-drop-active={dropZoneActive}
       onDragOver={(e) => {
         e.preventDefault()
@@ -132,75 +132,83 @@ export function Chat() {
       }}
       onDrop={handleDrop}
     >
-      <header className="chat__header">
-        <span className="chat__title">レストラン提案</span>
-        <div className="chat__header-right">
+      <header className='chat__header'>
+        <span className='chat__title'>レストラン提案</span>
+        <div className='chat__header-right'>
           <ModelSelector value={model} onChange={handleModelChange} />
-          <span className="chat__status" data-status={status}>{isRegistering ? 'registering' : status}</span>
+          <span className='chat__status' data-status={status}>
+            {isRegistering ? 'registering' : status}
+          </span>
         </div>
       </header>
 
-      <div className="chat__messages">
+      <div className='chat__messages'>
         {messages.length === 0 && (
-          <div className="chat__empty">
+          <div className='chat__empty'>
             気分や条件を入力してください。例: 「中目黒で静かに飲みたい」
             <br />
             <small>📷 画像をドロップしてお店を登録することもできます。</small>
           </div>
         )}
         {messages.map((m) => (
-          <MessageBubble key={m.id} message={m as { id: string; role: string; parts: MessagePart[] }} />
+          <MessageBubble
+            key={m.id}
+            message={m as { id: string; role: string; parts: MessagePart[] }}
+          />
         ))}
-        {dropZoneActive && (
-          <div className="drop-overlay">📷 ここにドロップしてお店を登録</div>
-        )}
+        {dropZoneActive && <div className='drop-overlay'>📷 ここにドロップしてお店を登録</div>}
         <div ref={endRef} />
       </div>
 
-      <form className="chat__form" onSubmit={handleSubmit}>
+      <form className='chat__form' onSubmit={handleSubmit}>
         <ModeSelector value={mode} onChange={handleModeChange} />
         {imagePreview && (
-          <div className="image-preview">
-            <img src={imagePreview} alt="登録予定" />
+          <div className='image-preview'>
+            <img src={imagePreview} alt='登録予定' />
             <button
-              type="button"
-              className="image-preview__remove"
+              type='button'
+              className='image-preview__remove'
               onClick={() => setImageFile(null)}
-              aria-label="画像を削除"
+              aria-label='画像を削除'
             >
               ×
             </button>
-            <span className="image-preview__hint">写真と一言でお店を登録します</span>
+            <span className='image-preview__hint'>写真と一言でお店を登録します</span>
           </div>
         )}
-        <div className="chat__input-row">
+        <div className='chat__input-row'>
           <button
-            type="button"
-            className="chat__attach"
+            type='button'
+            className='chat__attach'
             onClick={() => fileInputRef.current?.click()}
-            title="画像を添付"
+            title='画像を添付'
           >
             📷
           </button>
           <input
             ref={fileInputRef}
-            type="file"
-            accept="image/*"
+            type='file'
+            accept='image/*'
             style={{ display: 'none' }}
             onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
           />
           <input
-            type="text"
-            name="chat-input"
-            className="chat__input"
+            type='text'
+            name='chat-input'
+            className='chat__input'
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={imageFile ? '一言コメント (例: 中目黒のラーメン屋)' : '気分を入力 / 画像をドロップ'}
+            placeholder={
+              imageFile ? '一言コメント (例: 中目黒のラーメン屋)' : '気分を入力 / 画像をドロップ'
+            }
             autoFocus
+            autoComplete='off'
+            autoCorrect='off'
+            spellCheck={false}
           />
           <button
-            type="submit"
-            className="chat__send"
+            type='submit'
+            className='chat__send'
             disabled={isBusy || (!input.trim() && !imageFile)}
           >
             {imageFile ? '登録' : '送信'}
@@ -211,11 +219,15 @@ export function Chat() {
   )
 }
 
-function MessageBubble({ message }: { message: { id: string; role: string; parts: MessagePart[] } }) {
+function MessageBubble({
+  message,
+}: {
+  message: { id: string; role: string; parts: MessagePart[] }
+}) {
   return (
-    <div className="message" data-role={message.role}>
-      <div className="message__role">{message.role === 'user' ? 'あなた' : 'AI'}</div>
-      <div className="message__body">
+    <div className='message' data-role={message.role}>
+      <div className='message__role'>{message.role === 'user' ? 'あなた' : 'AI'}</div>
+      <div className='message__body'>
         {message.parts.map((part, i) => (
           <PartView key={i} part={part} />
         ))}
@@ -244,12 +256,12 @@ type MessagePart =
 
 function PartView({ part }: { part: MessagePart }) {
   if (part.type === 'text') {
-    return <span className="part-text">{(part as { text: string }).text}</span>
+    return <span className='part-text'>{(part as { text: string }).text}</span>
   }
   if (part.type === 'file') {
     const fp = part as FilePart
     if (fp.url) {
-      return <img src={fp.url} alt="添付画像" className="message__file" />
+      return <img src={fp.url} alt='添付画像' className='message__file' />
     }
     return null
   }
@@ -258,14 +270,14 @@ function PartView({ part }: { part: MessagePart }) {
     const toolName = part.type.replace(/^tool-/, '')
     if (tp.state === 'input-streaming' || tp.state === 'input-available') {
       return (
-        <div className="tool-progress">
-          <span className="tool-progress__icon">⚙️</span>
+        <div className='tool-progress'>
+          <span className='tool-progress__icon'>⚙️</span>
           <span>{toolName} を実行中…</span>
         </div>
       )
     }
     if (tp.state === 'output-error') {
-      return <div className="tool-error">ツールエラー: {tp.errorText ?? 'unknown'}</div>
+      return <div className='tool-error'>ツールエラー: {tp.errorText ?? 'unknown'}</div>
     }
     if (tp.state === 'output-available') {
       if (toolName === 'search_restaurants') {
@@ -281,7 +293,7 @@ function PartView({ part }: { part: MessagePart }) {
         if (output?.html) return <OpenEndedView html={output.html} />
       }
       return (
-        <details className="tool-result">
+        <details className='tool-result'>
           <summary>{toolName} の結果</summary>
           <pre>{JSON.stringify(tp.output, null, 2)}</pre>
         </details>
