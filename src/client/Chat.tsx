@@ -1,6 +1,6 @@
 import { useAgentChat } from '@cloudflare/ai-chat/react'
 import { useAgent } from 'agents/react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { RestaurantAgent } from '../agent'
 import { DEFAULT_MODE, type Mode } from '../modes'
 import { DEFAULT_MODEL, type ModelId } from '../models'
@@ -42,8 +42,21 @@ export function Chat() {
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [isRegistering, setIsRegistering] = useState(false)
   const [dropZoneActive, setDropZoneActive] = useState(false)
+  const [historyIndex, setHistoryIndex] = useState(-1)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
+
+  // 過去のユーザ発話を新しい順で
+  const userHistory = useMemo(() => {
+    const texts: string[] = []
+    for (const m of messages) {
+      if (m.role !== 'user') continue
+      for (const p of m.parts as Array<{ type: string; text?: string }>) {
+        if (p.type === 'text' && p.text) texts.push(p.text)
+      }
+    }
+    return texts.reverse()
+  }, [messages])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -91,6 +104,24 @@ export function Chat() {
     if (!input.trim()) return
     sendMessage({ text: input })
     setInput('')
+    setHistoryIndex(-1)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing) return
+    if (e.key === 'ArrowUp') {
+      if (userHistory.length === 0) return
+      const next = Math.min(historyIndex + 1, userHistory.length - 1)
+      e.preventDefault()
+      setHistoryIndex(next)
+      setInput(userHistory[next] ?? '')
+    } else if (e.key === 'ArrowDown') {
+      if (historyIndex < 0) return
+      const next = historyIndex - 1
+      e.preventDefault()
+      setHistoryIndex(next)
+      setInput(next < 0 ? '' : (userHistory[next] ?? ''))
+    }
   }
 
   const setAgentState = agent.setState as unknown as (s: AgentSyncState) => void
@@ -205,7 +236,11 @@ export function Chat() {
             name='chat-input'
             className='chat__input'
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value)
+              if (historyIndex !== -1) setHistoryIndex(-1)
+            }}
+            onKeyDown={handleKeyDown}
             placeholder={
               imageFile ? '一言コメント (例: 関内のラーメン屋)' : '気分を入力 / 画像をドロップ'
             }
