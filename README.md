@@ -132,20 +132,20 @@ streamText({
 ```mermaid
 sequenceDiagram
   participant U as User
-  participant L as LLM<br/>(Workers AI)
-  participant T as search_restaurants<br/>(tool execute)
+  participant L as LLM (Workers AI)
+  participant T as search_restaurants tool
   participant DB as D1
   participant P as PartView (client)
-  participant V as &lt;RestaurantList /&gt;
+  participant V as RestaurantList コンポーネント
 
-  U->>L: 「関内で静かに飲みたい」
-  L->>T: tool call<br/>{ area: '関内', atmosphere: '静か' }
-  T->>DB: SELECT * FROM restaurants<br/>WHERE area LIKE ? AND atmosphere LIKE ?
-  DB-->>T: rows[]
+  U->>L: 関内で静かに飲みたい
+  L->>T: tool call (area=関内, atmosphere=静か)
+  T->>DB: SELECT * FROM restaurants WHERE ...
+  DB-->>T: rows
   T-->>L: { restaurants: [...] }
-  L-->>P: message.parts に<br/>tool-search_restaurants part
-  P->>V: restaurants を渡す
-  V-->>U: &lt;RestaurantCard /&gt; を並べて描画
+  L-->>P: tool-search_restaurants part
+  P->>V: restaurants を props で渡す
+  V-->>U: RestaurantCard を並べて描画
 ```
 
 ポイント: LLM は「どのコンポーネントを使うか」を tool 名で表明している（`search_restaurants` → 自動的にカード）。コンポーネントの実装と props 形は完全に開発者の手中にある。
@@ -158,19 +158,19 @@ sequenceDiagram
   participant L as LLM
   participant T1 as search_restaurants
   participant DB as D1
-  participant T2 as render_ui<br/>(echo back)
+  participant T2 as render_ui (echo back)
   participant P as PartView
-  participant V as &lt;DeclarativeView /&gt;
+  participant V as DeclarativeView
 
-  U->>L: 「関内で静かに飲みたい」
+  U->>L: 関内で静かに飲みたい
   L->>T1: tool call
   T1->>DB: SELECT ...
-  DB-->>T1: rows[]
+  DB-->>T1: rows
   T1-->>L: { restaurants: [...] }
-  L->>T2: tool call<br/>{ sections: [{ heading, cards: [...] }] }<br/>(Section/Card プリミティブで組立)
-  T2-->>L: 入力をそのまま返す<br/>(echo back)
+  L->>T2: tool call (Section / Card プリミティブの JSON ツリー)
+  T2-->>L: 入力をそのまま返す (echo back)
   L-->>P: tool-render_ui part
-  P->>V: ui ツリーを渡す
+  P->>V: ui ツリーを props で渡す
   V-->>U: Section / Card を再帰描画
 ```
 
@@ -184,17 +184,17 @@ sequenceDiagram
   participant L as LLM
   participant T1 as search_restaurants
   participant DB as D1
-  participant T2 as render_html<br/>(echo back)
+  participant T2 as render_html (echo back)
   participant P as PartView
-  participant I as &lt;OpenEndedView /&gt;<br/>(iframe sandbox + CSP)
+  participant I as OpenEndedView (iframe + CSP)
 
-  U->>L: 「関内で静かに飲みたい」
+  U->>L: 関内で静かに飲みたい
   L->>T1: tool call
   T1->>DB: SELECT ...
-  DB-->>T1: rows[]
+  DB-->>T1: rows
   T1-->>L: { restaurants: [...] }
-  L->>T2: tool call<br/>{ html: '&lt;!doctype html&gt;...&lt;/html&gt;' }<br/>(完全な HTML 文書を生成)
-  T2-->>L: 入力をそのまま返す<br/>(echo back)
+  L->>T2: tool call (完全な HTML 文書を生成)
+  T2-->>L: 入力をそのまま返す (echo back)
   L-->>P: tool-render_html part
   P->>I: html を srcDoc に注入
   I-->>U: iframe (allow-scripts + CSP) 内で実行
