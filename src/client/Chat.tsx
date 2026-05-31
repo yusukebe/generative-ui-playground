@@ -153,7 +153,7 @@ export function Chat() {
       <div className='chat__messages'>
         {messages.length === 0 && (
           <div className='chat__empty'>
-            気分や条件を入力してください。例: 「中目黒で静かに飲みたい」
+            気分や条件を入力してください。例: 「関内で静かに飲みたい」
             <br />
             <small>📷 画像をドロップしてお店を登録することもできます。</small>
           </div>
@@ -207,7 +207,7 @@ export function Chat() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={
-              imageFile ? '一言コメント (例: 中目黒のラーメン屋)' : '気分を入力 / 画像をドロップ'
+              imageFile ? '一言コメント (例: 関内のラーメン屋)' : '気分を入力 / 画像をドロップ'
             }
             autoFocus
             autoComplete='off'

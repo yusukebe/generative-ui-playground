@@ -42,64 +42,65 @@ bun run deploy            # Cloudflare へデプロイ
 
 # アーキテクチャ解説
 
-## 全体図
+## レイヤ俯瞰
 
+ざっくり 3 層構造。下に各層の詳細図を載せる。
+
+```mermaid
+flowchart LR
+  B["Browser<br/>React SPA<br/>(src/client/*)"]
+  W["Cloudflare Worker<br/>Hono + Agents SDK<br/>(src/index.tsx, src/agent.ts)"]
+  D["Cloudflare Bindings<br/>AI / D1 / R2"]
+
+  B <-->|WebSocket| W
+  W -->|env| D
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│  Browser (React SPA / src/client/*)                              │
-│                                                                  │
-│  ┌────────────┐    ┌──────────────┐    ┌──────────────────────┐  │
-│  │ Chat.tsx   │───▶│ useAgentChat │◀──▶│ WebSocket            │  │
-│  │ (UI)       │    │ (@cf/ai-chat)│    │ /agents/restaurant/* │  │
-│  └────────────┘    └──────────────┘    └──────────┬───────────┘  │
-│         │                                         │              │
-│         │ part を type で分岐して                  │              │
-│         ▼                                         │              │
-│  ┌─────────────────────────────────────┐         │              │
-│  │ tool-search_restaurants             │         │              │
-│  │   → <RestaurantList />              │         │              │
-│  │ tool-render_ui                      │         │              │
-│  │   → <DeclarativeView />             │         │              │
-│  │ tool-render_html                    │         │              │
-│  │   → <OpenEndedView /> (iframe)      │         │              │
-│  └─────────────────────────────────────┘         │              │
-└──────────────────────────────────────────────────┼──────────────┘
-                                                   │
-                                                   ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  Cloudflare Worker (Hono / src/index.tsx)                        │
-│                                                                  │
-│  app.use('/agents/*', agentsMiddleware())                        │
-│                       │                                          │
-│                       ▼                                          │
-│  ┌───────────────────────────────────────────────────────────┐   │
-│  │ RestaurantAgent (Durable Object / src/agent.ts)           │   │
-│  │ extends AIChatAgent<CloudflareBindings, AgentState>       │   │
-│  │                                                           │   │
-│  │  state: { model, mode } ←─ クライアントと双方向同期       │   │
-│  │  messages: 永続化される会話履歴 (DO SQLite)               │   │
-│  │                                                           │   │
-│  │  onChatMessage():                                         │   │
-│  │    streamText({                                           │   │
-│  │      model: workers-ai-provider(state.model)              │   │
-│  │      system: PROMPTS[state.mode]                          │   │
-│  │      tools: mode に応じて切替                             │   │
-│  │      stopWhen: stepCountIs(5)                             │   │
-│  │    }).toUIMessageStreamResponse()                         │   │
-│  │                                                           │   │
-│  │  @callable registerRestaurant():                          │   │
-│  │    Vision → 正規化 → R2 + D1 → saveMessages               │   │
-│  └────────┬──────────────────────────────────────────────────┘   │
-│           │                                                      │
-└───────────┼──────────────────────────────────────────────────────┘
-            │
-            ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  Cloudflare Bindings                                             │
-│  - env.AI     Workers AI (LLM + Vision)                          │
-│  - env.DB     D1 SQLite (restaurants テーブル)                   │
-│  - env.PHOTOS R2 (写真オブジェクトストレージ)                    │
-└──────────────────────────────────────────────────────────────────┘
+
+### Layer 1 — Browser (React SPA)
+
+`Chat.tsx` は `useAgentChat` フックで Agent と双方向通信し、返ってきたメッセージの `parts` を `PartView` が type で分岐してそれぞれの View に振り分ける。
+
+```mermaid
+flowchart TB
+  Chat["Chat.tsx<br/>(入力 + DnD)"] --> Hook["useAgentChat<br/>(@cloudflare/ai-chat/react)"]
+  Hook --> PartView["PartView<br/>(message.parts を type で分岐)"]
+
+  PartView -->|tool-search_restaurants| RList["&lt;RestaurantList /&gt;"]
+  PartView -->|tool-render_ui| DView["&lt;DeclarativeView /&gt;"]
+  PartView -->|tool-render_html| OEView["&lt;OpenEndedView /&gt;<br/>(iframe + CSP)"]
+  PartView -->|text| Text["&lt;span /&gt; (普通のテキスト)"]
+```
+
+### Layer 2 — Worker (Hono + Agent)
+
+`/agents/*` を `agentsMiddleware` が引き受け、Durable Object として動く `RestaurantAgent` に到達する。Agent は `state` (model + mode) と `messages` (会話履歴) を SQLite に永続化し、2 つのエントリポイントを持つ。
+
+```mermaid
+flowchart TB
+  Route["/agents/restaurant-agent/default"] --> Mid["agentsMiddleware()<br/>(hono-agents)"]
+  Mid --> Agent["RestaurantAgent<br/>(Durable Object)<br/>state: { model, mode }<br/>messages: 永続化"]
+
+  Agent --> Stream["onChatMessage()<br/>streamText({<br/>　model: workers-ai-provider(state.model),<br/>　system: PROMPTS[state.mode],<br/>　tools: mode に応じて切替,<br/>　stopWhen: stepCountIs(5)<br/>})"]
+
+  Agent --> Reg["@callable registerRestaurant()<br/>Vision → 正規化 → R2 + D1<br/>→ saveMessages"]
+```
+
+### Layer 3 — Bindings へのアクセス
+
+`onChatMessage` の中で発火する tool execute と、`registerRestaurant` の登録パイプラインがそれぞれ Cloudflare のバインディングを叩く。
+
+```mermaid
+flowchart LR
+  Stream["onChatMessage()<br/>streamText"] -->|LLM 推論| AI
+  Stream -.->|tool: search_restaurants| DB
+
+  Reg["@callable<br/>registerRestaurant()"] -->|Vision + generateObject| AI
+  Reg -->|画像保存| PHOTOS
+  Reg -->|INSERT| DB
+
+  AI["env.AI<br/>Workers AI (LLM + Vision)"]
+  DB["env.DB<br/>D1 SQLite<br/>(restaurants)"]
+  PHOTOS["env.PHOTOS<br/>R2"]
 ```
 
 ## モード切替の仕組み
@@ -128,8 +129,8 @@ streamText({
 
 ### Controlled
 
-1. ユーザ「中目黒で静かに飲みたい」
-2. LLM が `search_restaurants({ area: '中目黒', atmosphere: '静か' })` を tool call
+1. ユーザ「関内で静かに飲みたい」
+2. LLM が `search_restaurants({ area: '関内', atmosphere: '静か' })` を tool call
 3. AI SDK がツールを実行 → `searchRestaurants()` (src/tools/search-restaurants.ts) が D1 を `SELECT * FROM restaurants WHERE area LIKE ?` でクエリ
 4. ツール結果 `{ restaurants: [...] }` がメッセージの parts に `{ type: 'tool-search_restaurants', state: 'output-available', output }` として乗る
 5. クライアントの `PartView` (src/client/Chat.tsx) が type を見て `<RestaurantList restaurants={...} />` をレンダ
@@ -159,32 +160,28 @@ streamText({
 
 ## 「フォーム UI は消える」登録フロー
 
-```
-[user]   入力欄に「中目黒のラーメン屋」+ 画像をドロップ
-   │
-   ▼
-[client] agent.stub.registerRestaurant({ text, imageDataUrl, imageMime })
-   │     ※ RPC call (Agents SDK の @callable)
-   ▼
-[server] addRestaurant() (src/tools/add-restaurant.ts)
-   │
-   ├─▶ Workers AI Vision (llama-3.2-11b-vision-instruct)
-   │     image → "二郎系の濃厚ラーメンが写っている"
-   │
-   ├─▶ Workers AI generateObject (llama-3.3-70b-instruct-fp8-fast)
-   │     text + visionSummary → { name, area, genre, tags, atmosphere,
-   │                              price_range, note } (Zod 検証付き)
-   │
-   ├─▶ R2.put(`${uuid}`, bytes)          (写真)
-   ├─▶ D1.INSERT INTO restaurants ...    (構造化レコード)
-   │
-   ▼
-[server] this.saveMessages([userMsg, assistantMsg])
-   │     ※ user メッセージ (画像 file part 付き) と確認テキストを履歴に追加
-   ▼
-[client] useAgentChat が自動同期、新メッセージが表示される
-   │
-   └─▶ 次の検索で D1 から新登録分も hit する
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant C as Client (Chat.tsx)
+  participant A as RestaurantAgent (DO)
+  participant V as Workers AI Vision
+  participant N as Workers AI (Llama 3.3 70B)
+  participant R as R2
+  participant D as D1
+
+  U->>C: テキスト「関内のラーメン屋」+ 画像 DnD
+  C->>A: agent.stub.registerRestaurant({ text, imageDataUrl })<br/>(RPC via @callable)
+  A->>V: ai.run('llama-3.2-11b-vision-instruct', { image, prompt })
+  V-->>A: 「二郎系の濃厚ラーメンの写真」
+  A->>N: generateObject({ schema: NormalizedSchema })<br/>text + visionSummary
+  N-->>A: { name, area, genre, tags, atmosphere, price_range, note }
+  A->>R: PHOTOS.put(uuid, bytes)
+  A->>D: INSERT INTO restaurants (...)
+  A->>A: this.saveMessages([userMsg, assistantMsg])
+  A-->>C: 新メッセージが WebSocket で同期
+  C-->>U: チャット履歴に「✅ 保存しました」が表示
+  Note over U,D: 次の search_restaurants で新登録分も hit する
 ```
 
 ## 主要ファイル

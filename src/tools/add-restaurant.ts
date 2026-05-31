@@ -8,7 +8,7 @@ const NORMALIZE_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
 
 const NormalizedSchema = z.object({
   name: z.string().describe('店名'),
-  area: z.string().describe('エリア (例: 中目黒, 渋谷)'),
+  area: z.string().describe('エリア (例: 関内, 馬車道, 中華街, 野毛, 桜木町, みなとみらい, 元町)'),
   genre: z.string().describe('ジャンル (例: ラーメン, イタリアン)'),
   tags: z.array(z.string()).max(5).describe('特徴を表すタグ 3〜5 個'),
   atmosphere: z.string().describe('雰囲気 (静か, 賑やか, デート向き, 落ち着いた のいずれか)'),

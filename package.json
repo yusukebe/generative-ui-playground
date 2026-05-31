@@ -15,6 +15,7 @@
   "dependencies": {
     "@ai-sdk/react": "^3.0.195",
     "@cloudflare/ai-chat": "^0.7.2",
+    "@cloudflare/codemode": "^0.3.8",
     "agents": "^0.13.3",
     "ai": "^6.0.193",
     "hono": "^4.12.23",

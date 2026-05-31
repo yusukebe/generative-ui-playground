@@ -28,7 +28,7 @@ CopilotKit が提唱する 3 バンド ([原典](https://www.copilotkit.ai/gener
 
 ### 登録フロー
 
-1. ユーザがチャット欄に自然文 + 画像をドラッグ&ドロップ (例: 「中目黒のあのラーメン屋すごく良かった」+ 写真)
+1. ユーザがチャット欄に自然文 + 画像をドラッグ&ドロップ (例: 「関内のあのラーメン屋すごく良かった」+ 写真)
 2. Agent が intent 判定 (登録 / 検索)
 3. 登録の場合:
    - Workers AI Vision で画像から「料理名 / 雰囲気 / 推定ジャンル」を抽出
@@ -59,7 +59,7 @@ CopilotKit が提唱する 3 バンド ([原典](https://www.copilotkit.ai/gener
 ```
 ┌──────────────┬─────────────────────────────────────┐
 │ History      │  ┌─ Chat (messages with mode badge)┐ │
-│ Sidebar      │  │ user: 中目黒のラーメン屋来た 📷  │ │
+│ Sidebar      │  │ user: 関内のラーメン屋来た 📷    │ │
 │ (260px)      │  │ [Controlled] → <RestaurantCard> │ │
 │              │  │ user: 静かに飲みたい            │ │
 │ • New chat   │  │ [Open-Ended] → iframe ✨        │ │
@@ -122,7 +122,7 @@ wrangler.jsonc              D1 / R2 / Agent (DO) / AI / vars / secrets を追加
 
 ## デモシナリオ (リハーサル基準)
 
-1. Controlled モードで「中目黒で静かに飲みたい」 → シードから提案カード表示
+1. Controlled モードで「関内で静かに飲みたい」 → シードから提案カード表示
 2. Declarative に切替 → 同じ質問 → 再構成されたカードが出る
 3. Open-Ended に切替 → 同じ質問 → 全く違う雰囲気の HTML が iframe で出る
 4. 「では今朝行ったラーメン屋を登録します」 → チャット + 写真 DnD → Places が正規化して保存される過程を見せる

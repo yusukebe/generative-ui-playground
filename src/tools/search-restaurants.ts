@@ -4,7 +4,10 @@ import { rowToRestaurant, type DbRestaurantRow, type Restaurant } from '../types
 
 export const SearchInputSchema = z.object({
   query: z.string().optional().describe('自由文クエリ。曖昧な気分の表現も可'),
-  area: z.string().optional().describe('エリア名 (例: 中目黒, 渋谷, 銀座)'),
+  area: z
+    .string()
+    .optional()
+    .describe('エリア名 (例: 関内, 馬車道, 中華街, 野毛, 桜木町, みなとみらい, 元町)'),
   genre: z.string().optional().describe('ジャンル (例: ラーメン, イタリアン, 寿司, バー)'),
   atmosphere: z.string().optional().describe('雰囲気 (例: 静か, 賑やか, デート向き, 落ち着いた)'),
   limit: z.coerce.number().min(1).max(10).default(5),
