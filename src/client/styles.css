@@ -454,3 +454,94 @@ html, body, #root {
   background: white;
   margin-top: 8px;
 }
+
+/* Drag & drop / image preview */
+.chat[data-drop-active="true"] {
+  position: relative;
+}
+.chat[data-drop-active="true"]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px dashed var(--accent);
+  border-radius: 12px;
+  pointer-events: none;
+  background: rgba(99, 102, 241, 0.05);
+  z-index: 1;
+}
+.drop-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--accent);
+  color: white;
+  padding: 16px 24px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.image-preview {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  align-self: flex-start;
+}
+.image-preview img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+.image-preview__hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.image-preview__remove {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.chat__attach {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.chat__attach:hover {
+  background: var(--border);
+}
+
+.message__file {
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: 8px;
+  margin-top: 8px;
+}

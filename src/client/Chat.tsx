@@ -1,6 +1,7 @@
 import { useAgentChat } from '@cloudflare/ai-chat/react'
 import { useAgent } from 'agents/react'
 import { useEffect, useRef, useState } from 'react'
+import type { RestaurantAgent } from '../agent'
 import { DEFAULT_MODE, type Mode } from '../modes'
 import { DEFAULT_MODEL, type ModelId } from '../models'
 import type { DeclarativeUI } from '../schemas/declarative'
@@ -13,11 +14,20 @@ import { OpenEndedView } from './modes/OpenEndedView'
 
 type AgentSyncState = { model: ModelId; mode: Mode }
 
+function fileToDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
 export function Chat() {
   const [mode, setMode] = useState<Mode>(DEFAULT_MODE)
   const [model, setModel] = useState<ModelId>(DEFAULT_MODEL)
 
-  const agent = useAgent({
+  const agent = useAgent<typeof RestaurantAgent>({
     agent: 'RestaurantAgent',
     name: 'default',
     onStateUpdate: (state: AgentSyncState) => {
@@ -28,17 +38,57 @@ export function Chat() {
 
   const { messages, sendMessage, status } = useAgentChat({ agent })
   const [input, setInput] = useState('')
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [isRegistering, setIsRegistering] = useState(false)
+  const [dropZoneActive, setDropZoneActive] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [messages])
 
-  const isBusy = status === 'streaming' || status === 'submitted'
+  useEffect(() => {
+    if (!imageFile) {
+      setImagePreview(null)
+      return
+    }
+    const url = URL.createObjectURL(imageFile)
+    setImagePreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [imageFile])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const isBusy = status === 'streaming' || status === 'submitted' || isRegistering
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim() || isBusy) return
+    if (isBusy) return
+
+    if (imageFile) {
+      // 登録フロー
+      if (!input.trim()) {
+        // 画像のみでも登録できるようにテキストは空でも進める
+      }
+      setIsRegistering(true)
+      try {
+        const dataUrl = await fileToDataURL(imageFile)
+        await agent.stub.registerRestaurant({
+          text: input,
+          imageDataUrl: dataUrl,
+          imageMime: imageFile.type,
+        })
+        setInput('')
+        setImageFile(null)
+      } catch (err) {
+        console.error('registerRestaurant failed', err)
+      } finally {
+        setIsRegistering(false)
+      }
+      return
+    }
+
+    if (!input.trim()) return
     sendMessage({ text: input })
     setInput('')
   }
@@ -53,44 +103,105 @@ export function Chat() {
     agent.setState({ model, mode: m })
   }
 
+  const handleFile = (file: File | null) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) return
+    setImageFile(file)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDropZoneActive(false)
+    const file = e.dataTransfer.files?.[0]
+    handleFile(file ?? null)
+  }
+
   return (
-    <div className="chat">
+    <div
+      className="chat"
+      data-drop-active={dropZoneActive}
+      onDragOver={(e) => {
+        e.preventDefault()
+        if (e.dataTransfer.types.includes('Files')) setDropZoneActive(true)
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return
+        setDropZoneActive(false)
+      }}
+      onDrop={handleDrop}
+    >
       <header className="chat__header">
         <span className="chat__title">レストラン提案</span>
         <div className="chat__header-right">
           <ModelSelector value={model} onChange={handleModelChange} />
-          <span className="chat__status" data-status={status}>{status}</span>
+          <span className="chat__status" data-status={status}>{isRegistering ? 'registering' : status}</span>
         </div>
       </header>
 
       <div className="chat__messages">
         {messages.length === 0 && (
-          <div className="chat__empty">気分や条件を入力してください。例: 「中目黒で静かに飲みたい」</div>
+          <div className="chat__empty">
+            気分や条件を入力してください。例: 「中目黒で静かに飲みたい」
+            <br />
+            <small>📷 画像をドロップしてお店を登録することもできます。</small>
+          </div>
         )}
         {messages.map((m) => (
-          <MessageBubble key={m.id} message={m} />
+          <MessageBubble key={m.id} message={m as { id: string; role: string; parts: MessagePart[] }} />
         ))}
+        {dropZoneActive && (
+          <div className="drop-overlay">📷 ここにドロップしてお店を登録</div>
+        )}
         <div ref={endRef} />
       </div>
 
       <form className="chat__form" onSubmit={handleSubmit}>
         <ModeSelector value={mode} onChange={handleModeChange} />
+        {imagePreview && (
+          <div className="image-preview">
+            <img src={imagePreview} alt="登録予定" />
+            <button
+              type="button"
+              className="image-preview__remove"
+              onClick={() => setImageFile(null)}
+              aria-label="画像を削除"
+            >
+              ×
+            </button>
+            <span className="image-preview__hint">写真と一言でお店を登録します</span>
+          </div>
+        )}
         <div className="chat__input-row">
+          <button
+            type="button"
+            className="chat__attach"
+            onClick={() => fileInputRef.current?.click()}
+            title="画像を添付"
+          >
+            📷
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+          />
           <input
             type="text"
             name="chat-input"
             className="chat__input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="気分を入力 / 画像をドロップ"
+            placeholder={imageFile ? '一言コメント (例: 中目黒のラーメン屋)' : '気分を入力 / 画像をドロップ'}
             autoFocus
           />
           <button
             type="submit"
             className="chat__send"
-            disabled={!input.trim() || isBusy}
+            disabled={isBusy || (!input.trim() && !imageFile)}
           >
-            送信
+            {imageFile ? '登録' : '送信'}
           </button>
         </div>
       </form>
@@ -120,15 +231,25 @@ type ToolPart = {
   errorText?: string
 }
 
+type FilePart = { type: 'file'; mediaType?: string; url?: string }
+
 type MessagePart =
   | { type: 'text'; text: string }
   | { type: 'reasoning'; text: string }
+  | FilePart
   | ToolPart
   | { type: string; [k: string]: unknown }
 
 function PartView({ part }: { part: MessagePart }) {
   if (part.type === 'text') {
     return <span className="part-text">{(part as { text: string }).text}</span>
+  }
+  if (part.type === 'file') {
+    const fp = part as FilePart
+    if (fp.url) {
+      return <img src={fp.url} alt="添付画像" className="message__file" />
+    }
+    return null
   }
   if (typeof part.type === 'string' && part.type.startsWith('tool-')) {
     const tp = part as ToolPart
