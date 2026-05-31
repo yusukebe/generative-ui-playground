@@ -10,6 +10,14 @@
 - 本デモは「Generative UI が一般化した時代の**設計選択肢**」を象徴的に示す装置
 - MCP Apps はトーク本編で語る — デモはあえて MCP に依存しない作りに保つ
 
+## プレゼンのコアメッセージ
+
+> **Code Mode と Dynamic Workers で、Generative UI の未来を見せる**
+
+「Spectrum を 3 つに分けて見せる」ではない。**LLM がコードを書き、Dynamic Worker で実行される**仕組みそのものが面白く、その結果として Spectrum 上の様々な点に **LLM 自身が降り立てる**ことを体感させる。
+
+> 「これが未来です」がかっこいい着地。
+
 ## 中核アイデア (2026-05-31 大改修後)
 
 **LLM がコードを書く → Dynamic Worker で実行 → Response を返す**、を主軸とした **Code Mode + React** の単一プラットフォーム上で、LLM が状況に応じて Spectrum 上を歩く。
@@ -118,6 +126,14 @@
 - ⚠️ **worker-bundler の初回コスト**: 起動直後の最初のリクエストは React / react-dom/server / restaurant-ui を bundle するので遅い。本番では起動時に warm-up したい
 - ⚠️ **スタイリング磨き込み**: 「あとで」となっている。3 モードの視覚的な差別化はさらに強化できる余地あり (登壇前)
 - ⚠️ **登壇用リハーサル**: 想定する 5 つのデモシナリオを Kimi K2.6 で実行して、想定通りの Spectrum 移動が起きるか確認
+
+## 今後の検討候補 (登壇前に時間があれば)
+
+ユーザ提案 (2026-05-31 後半):
+
+1. **ガチの Response を返す** — `new Response(body, { headers: { 'content-type': ... } })` を LLM の関数戻り値として実際に返す。AI SDK の JSON シリアライズを越えるには codemode の executor を介さず `env.LOADER` 直叩きで Response を受け取るフローへ作り替える必要あり。「LLM が Worker のハンドラーを書いてる」感が更に増す
+2. **`list_components()` ツール** — LLM が「使えるコンポーネント一覧」を動的に取得できる仕組み。prompt 直書きから動的化、MCP Apps の文脈にも繋がる。実装軽い・効果大
+3. **ストリーミング描画** — `search_restaurants` の tool-call part が来た時点で先行レンダして、codemode の最終結果と差し替え or マージ。コンポーネント借用ルートが高速・ストリーム描画になり、Spectrum に **性能軸**が加わる
 
 ## デモシナリオ (リハーサル基準)
 
