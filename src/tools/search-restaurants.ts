@@ -31,7 +31,9 @@ export async function searchRestaurants(db: D1Database, input: SearchInput): Pro
     conditions.push('atmosphere LIKE ?')
     params.push(`%${input.atmosphere}%`)
   }
-  if (input.query) {
+  // query は他の絞り込み条件が無いときだけ使う (LLM が area/genre/atmosphere
+  // と一緒に query=ユーザ発話全体 を渡してくると AND 結合で 0 件になるため)
+  if (input.query && !input.area && !input.genre && !input.atmosphere) {
     conditions.push('(name LIKE ? OR note LIKE ? OR tags LIKE ? OR vision_summary LIKE ?)')
     const q = `%${input.query}%`
     params.push(q, q, q, q)
