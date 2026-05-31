@@ -1,10 +1,6 @@
-export type Mode = 'controlled' | 'declarative' | 'open-ended'
+import { MODES, type Mode } from '../modes'
 
-const MODES: { value: Mode; label: string }[] = [
-  { value: 'controlled', label: 'Controlled' },
-  { value: 'declarative', label: 'Declarative' },
-  { value: 'open-ended', label: 'Open-Ended' },
-]
+export type { Mode }
 
 export function ModeSelector({ value, onChange }: { value: Mode; onChange: (m: Mode) => void }) {
   return (
@@ -18,6 +14,7 @@ export function ModeSelector({ value, onChange }: { value: Mode; onChange: (m: M
           className="mode-selector__option"
           data-active={value === m.value}
           onClick={() => onChange(m.value)}
+          title={m.description}
         >
           {m.label}
         </button>

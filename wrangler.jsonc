@@ -11,6 +11,20 @@
   "ai": {
     "binding": "AI"
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "generative-ui-playground",
+      "database_id": "local",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "PHOTOS",
+      "bucket_name": "generative-ui-playground-photos"
+    }
+  ],
   "durable_objects": {
     "bindings": [
       {
