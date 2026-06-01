@@ -322,16 +322,22 @@ export function streamBand(
         : { 'workers-ai': { max_tokens: 4096, reasoning_effort: 'low' as const } }
       // 計測開始: ここから収集(ツール)＋描画ぜんぶがこのバンドのコスト
       const started = Date.now()
-      // 1) このバンド自身がツールを呼んでデータを集める (毎回)
-      const { weather, restaurants, lastTrain, agentTokens } = await gatherWithTools(
-        env,
-        params,
-        modelId,
-        send
-      )
+      // 1) データ収集。Controlled/Declarative/Open-Ended は事前にツールで集める。
+      //    **Dynamic は事前収集しない** — 描画時にコンポーネントが Suspense で取得する(Code Mode)。
+      let weather: Weather | null = null
+      let restaurants: Restaurant[] = []
+      let lastTrain: LastTrain = getLastTrain(params.area)
+      let agentTokens = 0
+      if (band !== 'dynamic') {
+        const gathered = await gatherWithTools(env, params, modelId, send)
+        weather = gathered.weather
+        restaurants = gathered.restaurants
+        lastTrain = gathered.lastTrain
+        agentTokens = gathered.agentTokens
+      }
       // 2) 描画フェーズ開始 (初描画 TTFR はここから測る)
       send({ type: 'render-start' })
-      const ctx = planContext(params, weather, restaurants, lastTrain)
+      const ctx = band === 'dynamic' ? '' : planContext(params, weather, restaurants, lastTrain)
       // 生成コストの計測 = 収集トークン + 生成トークン、時間は収集込みの総時間
       const metric = (usage: LanguageModelUsage | undefined, output: string) =>
         send({
@@ -394,18 +400,16 @@ ${ctxPhotos}`,
           send({ type: 'open-ended', html })
           metric(await usage, html)
         } else {
-          // Dynamic は restaurants(お店) と ramens(〆) を別 prop で受け取る
-          const izakaya = restaurants.filter((r) => r.genre !== '家系ラーメン')
-          const ramens = restaurants.filter((r) => r.genre === '家系ラーメン')
+          // Dynamic は事前収集しない。restaurants(お店) と ramens(〆id) は描画時に host が prop で渡す。
           const dynCtx = `条件: ${params.dateLabel}(${params.date}) / ${params.area} / ${params.partySize}人 / 用途:${params.purpose} / 気分:${params.mood || '指定なし'}
-restaurants(お店・手元データ): ${dataForPrompt(izakaya)}
-ramens(〆ラーメン候補・id と name のみ): ${JSON.stringify(ramens.map((r) => ({ id: r.id, name: r.name })))}`
+※ restaurants(お店) と ramens(〆ラーメンの id/name) は描画時に props で渡されます。データは埋め込まず props を使うこと。`
           const { textStream, text, usage } = streamText({
             model,
             providerOptions,
             prompt: `あなたは Dynamic バンド(Code Mode)のアシスタントです。夜のプランを表示する React
 コンポーネント function App({ restaurants, ramens }) を1つだけ書いてください (import/export は書かない)。
-- restaurants = お店 (手元にデータあり) / ramens = 〆ラーメン (id と name のみ)
+- restaurants = お店 (props で渡る) / ramens = 〆ラーメン (id と name のみ・props で渡る)
+- **データ取得は全部コンポーネント側**。あなたは型を見て組み立てるだけ (事前取得は不要)
 
 # 使える API (型定義だけ渡します。実装は Worker 側にあり、**あなたは中身を知る必要はありません**)
 \`\`\`ts
@@ -421,27 +425,27 @@ declare const CardSkeleton:   React.FC                                    // ロ
 \`\`\`
 
 # 書き方 (テンプレ。店名・天気・終電の値はコードに埋めず、コンポーネントに任せる)
-- お店は **「1軒目」「2軒目」… のラベル付き**で1枚ずつ (RestaurantCard)、〆は Ramen を Suspense で
+- お店は **「1軒目」「2軒目」… のラベル付き**で、**横並びグリッド**に (縦に伸ばさない)
 \`\`\`jsx
 function App({ restaurants, ramens }) {
   const labels = ['1軒目', '2軒目', '3軒目']
   return (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Suspense fallback={<CardSkeleton />}><Weather date="${params.date}" /></Suspense>
-      {restaurants.map((r, i) => (
-        <section key={r.id}>
-          <h2 style={{ fontSize: 16, margin: '0 0 8px' }}>{labels[i] || (i + 1) + '軒目'}</h2>
-          <RestaurantCard restaurant={r} />
-        </section>
-      ))}
-      <section>
-        <h2 style={{ fontSize: 16, margin: '0 0 8px' }}>〆</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-          {ramens.map((r) => (
-            <Suspense key={r.id} fallback={<CardSkeleton />}><Ramen id={r.id} /></Suspense>
-          ))}
-        </div>
-      </section>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+        {restaurants.map((r, i) => (
+          <div key={r.id}>
+            <h2 style={{ fontSize: 14, margin: '0 0 6px' }}>{labels[i] || (i + 1) + '軒目'}</h2>
+            <RestaurantCard restaurant={r} />
+          </div>
+        ))}
+      </div>
+      <h2 style={{ fontSize: 14, margin: 0 }}>〆のラーメン</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+        {ramens.map((r) => (
+          <Suspense key={r.id} fallback={<CardSkeleton />}><Ramen id={r.id} /></Suspense>
+        ))}
+      </div>
       <LastTrain area="${params.area}" />
     </div>
   )

@@ -447,7 +447,16 @@ export function Compare() {
                 </div>
               </div>
 
-              {toolCalls.length > 0 && (
+              {band === 'dynamic' && (
+                <div className='tool-activity'>
+                  <span className='tool-activity__title'>
+                    🧩 Code Mode: 事前ツール収集はしない。AI はコンポーネントを組むだけで、
+                    天気・〆ラーメンは<strong>描画時にコンポーネントが Suspense で取得</strong>する
+                  </span>
+                </div>
+              )}
+
+              {band !== 'dynamic' && toolCalls.length > 0 && (
                 <div className='tool-activity' data-running={results.status[band] === 'streaming'}>
                   <div className='tool-activity__head'>
                     <span className='tool-activity__title'>
