@@ -367,12 +367,14 @@ ${ctx}`,
             model,
             schema: DeclarativeUISchema,
             providerOptions,
-            prompt: `あなたは Declarative UI アシスタントです。Section と Card のプリミティブで
-夜のプランを組み立ててください。
-- intro に天気をふまえたプラン概要 (1〜2文)
-- **section は1個だけ** (例: heading="今夜のプラン")。その中に各店を card として並べる
-- 各 card: title=店名 / subtitle="1軒目 · エリア · ジャンル" / body=why(短く) / tags / **restaurantId=その店の id (必須・写真表示に使う)**
-- **提供された全店を card にする**。お店→〆(家系ラーメン) の順
+            prompt: `あなたは Declarative UI アシスタントです。**部品(blocks)を並べて**夜のプランを組み立てます。
+使える部品 type は weather / lastTrain / shop の3つ。実データはホストが持つので、あなたは「どれを・どの順で並べるか」を選ぶだけ。
+- intro: 天気をふまえたプラン概要 (1〜2文)
+- blocks (上から並ぶ): **weather → lastTrain → shop(お店) → … → shop(〆) の順**で並べる
+  - weather: { type:"weather" } (天気バナー)
+  - lastTrain: { type:"lastTrain" } (終電案内)
+  - shop: { type:"shop", restaurantId=店候補の id, label="1軒目"/"2軒目"/"〆", note=理由(短く) }
+- **提供された全店を shop にする** (お店→〆家系ラーメンの順)。restaurantId は候補の id を使う
 ${COMMON}
 ${ctx}`,
           })

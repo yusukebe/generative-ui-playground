@@ -525,7 +525,13 @@ export function Compare() {
                 </span>
               </div>
 
-              <BandPanel band={band} results={results} restaurants={restaurants} />
+              <BandPanel
+                band={band}
+                results={results}
+                restaurants={restaurants}
+                weather={weather}
+                lastTrain={lastTrain}
+              />
             </>
           )}
         </main>
@@ -538,10 +544,14 @@ function BandPanel({
   band,
   results,
   restaurants,
+  weather,
+  lastTrain,
 }: {
   band: Band
   results: BandResults
   restaurants: Restaurant[]
+  weather: Weather
+  lastTrain: LastTrain
 }) {
   const status = results.status[band]
   let preview: React.ReactNode
@@ -558,7 +568,12 @@ function BandPanel({
     scriptLabel = '🧠 AI が埋めたプラン (JSON)'
   } else if (band === 'declarative') {
     preview = results.declarative ? (
-      <DeclarativeView ui={results.declarative} restaurants={restaurants} />
+      <DeclarativeView
+        ui={results.declarative}
+        restaurants={restaurants}
+        weather={weather}
+        lastTrain={lastTrain}
+      />
     ) : (
       <Streaming label='UI ツリーを組み立て中…' />
     )

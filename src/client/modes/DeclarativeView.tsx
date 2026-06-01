@@ -1,32 +1,39 @@
 import type { DeclarativeUI } from '../../schemas/declarative'
 import type { Restaurant } from '../../ui-components'
+import { RestaurantCard } from '../../ui-components'
 
-// streamObject の途中状態 (DeepPartial) でも描画できるよう、全フィールドを optional 扱いにする
-type PartialCard = {
-  title?: string | null
-  subtitle?: string | null
-  body?: string | null
-  tags?: (string | null | undefined)[] | null
-  variant?: 'default' | 'highlight' | null
+type Weather = {
+  emoji: string
+  label: string
+  tempMax: number | null
+  tempMin: number | null
+  precipProb: number | null
+} | null
+type LastTrain = { station: string; summary: string; leaveBy: string } | null
+
+// streamObject の途中状態 (DeepPartial) でも描画できるよう loose に扱う
+type PartialBlock = {
+  type?: 'weather' | 'lastTrain' | 'shop' | null
   restaurantId?: string | null
-}
-type PartialSection = {
-  heading?: string | null
-  description?: string | null
-  cards?: (PartialCard | null | undefined)[] | null
+  label?: string | null
+  note?: string | null
 }
 type PartialUI = {
   title?: string | null
   intro?: string | null
-  sections?: (PartialSection | null | undefined)[] | null
+  blocks?: (PartialBlock | null | undefined)[] | null
 }
 
 export function DeclarativeView({
   ui,
   restaurants = [],
+  weather = null,
+  lastTrain = null,
 }: {
   ui: DeclarativeUI | PartialUI
   restaurants?: Restaurant[]
+  weather?: Weather
+  lastTrain?: LastTrain
 }) {
   const u = ui as PartialUI
   const byId = new Map(restaurants.map((r) => [r.id, r]))
@@ -34,55 +41,57 @@ export function DeclarativeView({
     <div className='declarative'>
       {u.title && <h2 className='declarative__title'>{u.title}</h2>}
       {u.intro && <p className='declarative__intro'>{u.intro}</p>}
-      {(u.sections ?? []).filter(Boolean).map((s, i) => (
-        <SectionView key={i} section={s as PartialSection} byId={byId} />
-      ))}
+      <div className='decl-blocks'>
+        {(u.blocks ?? []).filter(Boolean).map((b, i) => (
+          <BlockView key={i} block={b as PartialBlock} byId={byId} weather={weather} lastTrain={lastTrain} />
+        ))}
+      </div>
     </div>
   )
 }
 
-function SectionView({
-  section,
+function BlockView({
+  block,
   byId,
+  weather,
+  lastTrain,
 }: {
-  section: PartialSection
+  block: PartialBlock
   byId: Map<string, Restaurant>
+  weather: Weather
+  lastTrain: LastTrain
 }) {
-  return (
-    <section className='decl-section'>
-      {section.heading && <h3 className='decl-section__heading'>{section.heading}</h3>}
-      {section.description && <p className='decl-section__desc'>{section.description}</p>}
-      <div className='decl-section__cards'>
-        {(section.cards ?? []).filter(Boolean).map((c, i) => (
-          <CardView key={i} card={c as PartialCard} byId={byId} />
-        ))}
+  if (block.type === 'weather') {
+    if (!weather) return null
+    return (
+      <div className='decl-weather'>
+        {weather.emoji} {weather.label} / 最高{weather.tempMax ?? '?'}℃ / 降水{weather.precipProb ?? '?'}%
       </div>
-    </section>
-  )
-}
-
-function CardView({ card, byId }: { card: PartialCard; byId: Map<string, Restaurant> }) {
-  // restaurantId が候補に一致すれば、その店の写真をカード上部に出す (全バンドで写真を揃える)
-  const r = card.restaurantId ? byId.get(card.restaurantId) : undefined
-  return (
-    <article className='decl-card' data-variant={card.variant ?? 'default'}>
-      {r?.photo_url && (
-        <img className='decl-card__photo' src={r.photo_url} alt={card.title ?? r.name} loading='lazy' />
-      )}
-      <div className='decl-card__body-wrap'>
-        <div className='decl-card__title'>{card.title}</div>
-        {card.subtitle && <div className='decl-card__subtitle'>{card.subtitle}</div>}
-        {card.body && <div className='decl-card__body'>{card.body}</div>}
-        {card.tags && card.tags.filter(Boolean).length > 0 && (
-          <div className='decl-card__tags'>
-            {card.tags.filter(Boolean).map((t, i) => (
-              <span key={i} className='decl-card__tag'>
-                {t}
-              </span>
-            ))}
+    )
+  }
+  if (block.type === 'lastTrain') {
+    if (!lastTrain) return null
+    return (
+      <div className='decl-train'>
+        <span className='decl-train__icon'>🚃</span>
+        <div>
+          <div className='decl-train__head'>終電めやす · {lastTrain.station}</div>
+          <div className='decl-train__sub'>
+            {lastTrain.summary} ／ お店は <b>{lastTrain.leaveBy}</b> に出る
           </div>
-        )}
+        </div>
       </div>
-    </article>
-  )
+    )
+  }
+  if (block.type === 'shop') {
+    const r = block.restaurantId ? byId.get(block.restaurantId) : undefined
+    return (
+      <div className='decl-shop'>
+        {block.label && <h3 className='decl-shop__label'>{block.label}</h3>}
+        {r ? <RestaurantCard restaurant={r} /> : <div className='decl-shop__pending'>店を選択中…</div>}
+        {block.note && <p className='decl-shop__note'>{block.note}</p>}
+      </div>
+    )
+  }
+  return null
 }

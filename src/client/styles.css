@@ -703,6 +703,56 @@ body,
   color: var(--text-muted);
 }
 
+/* Declarative: 部品(blocks)を縦に並べる */
+.decl-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.decl-weather {
+  background: linear-gradient(135deg, #3b4cca, #5b6ee1);
+  color: #fff;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 700;
+  text-align: center;
+}
+.decl-train {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  background: var(--surface);
+}
+.decl-train__icon {
+  font-size: 22px;
+}
+.decl-train__head {
+  font-weight: 700;
+  font-size: 13px;
+}
+.decl-train__sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.decl-shop__label {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--accent);
+}
+.decl-shop__note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.decl-shop__pending {
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 12px;
+}
+
 /* Open-Ended mode */
 .open-ended {
   width: 100%;
