@@ -336,6 +336,15 @@ export function Compare() {
         <span className='chat__title'>飲み会アドバイザー 🍻</span>
         <div className='chat__header-right'>
           <ModelSelector value={model} onChange={setModel} />
+          <Button
+            type='button'
+            variant='ghost'
+            size='sm'
+            onClick={() => (window.location.href = '/gallery')}
+            title='共有コンポーネント一覧'
+          >
+            🧩 部品
+          </Button>
           <Button type='button' variant='ghost' size='sm' onClick={clear} title='クリア'>
             Clear
           </Button>
