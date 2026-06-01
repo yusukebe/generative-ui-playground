@@ -176,7 +176,7 @@ export function streamPrepare(
             if (gotIzakaya) return izRet
             gotIzakaya = true
             send({ type: 'tool', name: 'search_restaurants', args: input })
-            const restaurants = await findRestaurants(env, { ...input, limit: input.limit ?? 6 })
+            const restaurants = await findRestaurants(env, { ...input, limit: 2 })
             send({ type: 'izakaya', restaurants })
             // モデルに返すのは id と name だけ (プロンプトを膨らませない)
             izRet = { restaurants: restaurants.map((r) => ({ id: r.id, name: r.name })) }
@@ -185,12 +185,12 @@ export function streamPrepare(
         }),
         get_ramen: tool({
           description: '飲んだあとの〆の家系ラーメン候補(横浜)を取得する。1回だけ呼ぶ。',
-          inputSchema: z.object({ count: z.number().nullable().describe('件数 (省略時 4)') }),
+          inputSchema: z.object({ count: z.number().nullable().describe('件数 (省略時 1)') }),
           execute: async ({ count }) => {
             if (gotRamen) return rmRet
             gotRamen = true
             send({ type: 'tool', name: 'get_ramen', args: { count } })
-            const restaurants = await getRamenShops(count ?? 4)
+            const restaurants = await getRamenShops(1)
             send({ type: 'ramen', restaurants })
             rmRet = { restaurants: restaurants.map((r) => ({ id: r.id, name: r.name })) }
             return rmRet
@@ -208,9 +208,9 @@ export function streamPrepare(
 以下の条件に対し、4つのツールを**すべて**呼んで情報を集めてください (順不同・並行で構いません)。
 - get_weather(date="${params.date}")
 - get_last_train(area="${params.area}")
-- search_restaurants(area="${params.area}", query=用途や気分を表す短い語): 飲み会向けの居酒屋を6件ほど
-- get_ramen(): 〆の家系ラーメン候補
-全部のツールを呼び終えたら「集めました」とだけ短く返してください。
+- search_restaurants(area="${params.area}", query=用途や気分を表す短い語): 1軒目・2軒目用のお店を2件
+- get_ramen(): 〆の家系ラーメンを1件
+各ツールは**1回ずつ**呼ぶこと。全部呼び終えたら「集めました」とだけ短く返してください。
 
 条件: ${params.dateLabel}(${params.date}) / ${params.area} / ${params.partySize}人 / 用途:${params.purpose} / 気分:${params.mood || '指定なし'}`,
         })
@@ -232,10 +232,10 @@ export function streamPrepare(
           const query = [params.purpose, params.mood].filter(Boolean).join(' ')
           send({
             type: 'izakaya',
-            restaurants: await findRestaurants(env, { area: params.area, query, limit: 6 }),
+            restaurants: await findRestaurants(env, { area: params.area, query, limit: 2 }),
           })
         }
-        if (!gotRamen) send({ type: 'ramen', restaurants: await getRamenShops(4) })
+        if (!gotRamen) send({ type: 'ramen', restaurants: await getRamenShops(1) })
       } catch (e) {
         console.error('[prepare] fallback failed:', e)
       }
@@ -285,7 +285,7 @@ function planContext(
 天気: ${w}
 終電: ${lastTrain.station} … ${lastTrain.summary} (お店を出る目安 ${lastTrain.leaveBy})
 店候補 (この中の店だけ使う・id 必須。genre が「家系ラーメン」の店は〆ラーメン専用): ${dataForPrompt(restaurants, includePhoto)}
-プラン構成: 1軒目・2軒目は居酒屋系から、最後の「〆」は家系ラーメンの店を1つ。**最後に終電メモ(${lastTrain.station}の終電目安と「${lastTrain.leaveBy}には出る」)を必ず添える。**`
+プラン構成: **提供された全店を使う**。お店(家系ラーメン以外)を「1軒目」「2軒目」、家系ラーメンを「〆」とする (=1軒目・2軒目・〆 の3ステップ)。**最後に終電メモ(${lastTrain.station}の終電目安と「${lastTrain.leaveBy}には出る」)を必ず添える。**`
 }
 
 const COMMON = `重要: 店名・住所は候補データの値だけを使い創作しない。日本語で。雨/寒いなど天気をプランに反映する。`
@@ -361,7 +361,7 @@ ${ctx}`,
 - intro に天気をふまえたプラン概要 (1〜2文)
 - **section は1個だけ** (例: heading="今夜のプラン")。その中に各店を card として並べる
 - 各 card: title=店名 / subtitle="1軒目 · エリア · ジャンル" / body=why(短く) / tags / **restaurantId=その店の id (必須・写真表示に使う)**
-- 店は 1軒目→2軒目→〆 の順。〆は家系ラーメンの店
+- **提供された全店を card にする**。お店→〆(家系ラーメン) の順
 ${COMMON}
 ${ctx}`,
           })
@@ -390,34 +390,38 @@ ${ctxPhotos}`,
           send({ type: 'open-ended', html })
           metric(await usage, html)
         } else {
-          // Dynamic は restaurants(居酒屋) と ramens(〆) を別 prop で受け取る
+          // Dynamic は restaurants(お店) と ramens(〆) を別 prop で受け取る
           const izakaya = restaurants.filter((r) => r.genre !== '家系ラーメン')
           const ramens = restaurants.filter((r) => r.genre === '家系ラーメン')
           const dynCtx = `条件: ${params.dateLabel}(${params.date}) / ${params.area} / ${params.partySize}人 / 用途:${params.purpose} / 気分:${params.mood || '指定なし'}
-restaurants(居酒屋・手元データ): ${dataForPrompt(izakaya)}
-ramens(〆ラーメン候補・id と name のみ。詳細は useRamenShop で取る): ${JSON.stringify(ramens.map((r) => ({ id: r.id, name: r.name })))}`
+restaurants(お店・手元データ): ${dataForPrompt(izakaya)}
+ramens(〆ラーメン候補・id と name のみ): ${JSON.stringify(ramens.map((r) => ({ id: r.id, name: r.name })))}`
           const { textStream, text, usage } = streamText({
             model,
             providerOptions,
-            prompt: `あなたは Dynamic バンドのアシスタントです。夜のプランを表示する React
+            prompt: `あなたは Dynamic バンド(Code Mode)のアシスタントです。夜のプランを表示する React
 コンポーネント function APP({ restaurants, ramens }) を1つだけ書いてください (import/export は書かない)。
-- restaurants = 居酒屋 (手元にデータあり) / ramens = 〆ラーメン (id と name のみ)
-- 天気・終電は**専用コンポーネントが自分でデータを持つ**ので、あなたは置くだけ (date/area を渡す)
+- restaurants = お店 (手元にデータあり) / ramens = 〆ラーメン (id と name のみ)
 
-# スコープで使えるもの (再利用できる完成済みコンポーネント)
-- <Weather date="${params.date}" /> : 天気バナー。中で自分で取得するので **<Suspense> の中で使う**
-- <LastTrain area="${params.area}" /> : 終電案内 (即時・Suspense 不要)
-- <RestaurantList restaurants={restaurants} /> : 居酒屋の一覧を即描画
-- <Ramen id={ramenId} /> : 〆ラーメン1件。中で useRamenShop が per-item 取得し、ラーメン専用UIで描画。**必ず <Suspense> の中で使う**
-- <CardSkeleton /> : ローディング / Suspense : React の Suspense
+# 使える API (型定義だけ渡します。実装は Worker 側にあり、**あなたは中身を知る必要はありません**)
+\`\`\`ts
+type Restaurant = { id: string; name: string; area: string; genre: string; tags: string[]; note: string | null; price_range: string | null; photo_url?: string | null }
+// 非同期コンポーネント (内部で fetch する。**必ず <Suspense> で包む**)
+declare const Weather: React.FC<{ date: string }>   // 天気バナー (自分で天気を取得)
+declare const Ramen:   React.FC<{ id: string }>     // 〆ラーメン1件 (自分でラーメン詳細を取得)
+// 同期コンポーネント (即描画)
+declare const LastTrain:      React.FC<{ area: string }>                  // 終電案内
+declare const RestaurantList: React.FC<{ restaurants: Restaurant[] }>     // お店一覧
+declare const CardSkeleton:   React.FC                                    // ローディング
+\`\`\`
 
-# 書き方 (テンプレ。店名や天気の値は埋め込まず、コンポーネントに任せる)
+# 書き方 (テンプレ。店名・天気・終電の値はコードに埋めず、コンポーネントに任せる)
 \`\`\`jsx
 function APP({ restaurants, ramens }) {
   return (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Suspense fallback={<CardSkeleton />}><Weather date="${params.date}" /></Suspense>
-      <h2 style={{ fontSize: 18, margin: 0 }}>居酒屋</h2>
+      <h2 style={{ fontSize: 18, margin: 0 }}>お店</h2>
       <RestaurantList restaurants={restaurants} />
       <h2 style={{ fontSize: 18, margin: 0 }}>〆のラーメン</h2>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>

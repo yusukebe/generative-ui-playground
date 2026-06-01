@@ -83,8 +83,8 @@ app.get('/api/dynamic-frame', async (c) => {
     return c.notFound()
   }
   const [izakaya, ramen] = await Promise.all([
-    findRestaurants(c.env, { area, query: q, limit: 3 }),
-    getRamenShops(4),
+    findRestaurants(c.env, { area, query: q, limit: 2 }),
+    getRamenShops(1),
   ])
   // restaurants(居酒屋) と ramens(〆) を別々に渡す。ramens は id+名前だけ
   // (写真等の詳細は worker 内の useRamenShop が per-item 取得=本物の Suspense)
