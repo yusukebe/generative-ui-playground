@@ -20,6 +20,7 @@ type Weather = {
   precipProb: number | null
 } | null
 
+type LastTrain = { station: string; summary: string; leaveBy: string } | null
 type Turn = { role: 'user' | 'assistant'; text: string }
 
 type BandResults = {
@@ -61,6 +62,7 @@ export function Compare() {
   const [intaking, setIntaking] = useState(false)
   const [params, setParams] = useState<PlanParams | null>(null)
   const [weather, setWeather] = useState<Weather>(null)
+  const [lastTrain, setLastTrain] = useState<LastTrain>(null)
   const [restaurants, setRestaurants] = useState<Restaurant[]>([])
   const [results, setResults] = useState<BandResults>(EMPTY_RESULTS)
   const [band, setBand] = useState<Band>('controlled')
@@ -102,16 +104,23 @@ export function Compare() {
       if (!res.ok) throw new Error(`intake ${res.status}`)
       const data = (await res.json()) as
         | { ready: false; question: string }
-        | { ready: true; params: PlanParams; weather: Weather; restaurants: Restaurant[] }
+        | {
+            ready: true
+            params: PlanParams
+            weather: Weather
+            restaurants: Restaurant[]
+            lastTrain: LastTrain
+          }
 
       if (!data.ready) {
         setConvo([...nextConvo, { role: 'assistant', text: data.question }])
       } else {
         setParams(data.params)
         setWeather(data.weather)
+        setLastTrain(data.lastTrain)
         setRestaurants(data.restaurants)
         setResults(EMPTY_RESULTS)
-        generateBand(band, data.params, data.weather, data.restaurants)
+        generateBand(band, data.params, data.weather, data.restaurants, data.lastTrain)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'エラー')
@@ -120,7 +129,13 @@ export function Compare() {
     }
   }
 
-  const generateBand = async (b: Band, p: PlanParams, w: Weather, rs: Restaurant[]) => {
+  const generateBand = async (
+    b: Band,
+    p: PlanParams,
+    w: Weather,
+    rs: Restaurant[],
+    lt: LastTrain
+  ) => {
     setResults((r) => ({
       ...r,
       ...(b === 'controlled' && { controlled: null }),
@@ -133,7 +148,7 @@ export function Compare() {
       const res = await fetch('/api/band', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ band: b, params: p, weather: w, restaurants: rs, model }),
+        body: JSON.stringify({ band: b, params: p, weather: w, restaurants: rs, lastTrain: lt, model }),
       })
       if (!res.ok || !res.body) throw new Error(`band ${res.status}`)
       const reader = res.body.getReader()
@@ -196,7 +211,7 @@ export function Compare() {
   const switchBand = (b: Band) => {
     setBand(b)
     if (ready && params && results.status[b] === 'idle') {
-      generateBand(b, params, weather, restaurants)
+      generateBand(b, params, weather, restaurants, lastTrain)
     }
   }
 
@@ -204,6 +219,7 @@ export function Compare() {
     setConvo([])
     setParams(null)
     setWeather(null)
+    setLastTrain(null)
     setRestaurants([])
     setResults(EMPTY_RESULTS)
     setError(null)
@@ -296,6 +312,11 @@ export function Compare() {
                   <span className='plan-cond__chip'>
                     {weather.emoji} {weather.label} {weather.tempMax ?? '?'}℃ / 降水
                     {weather.precipProb ?? '?'}%
+                  </span>
+                )}
+                {lastTrain && (
+                  <span className='plan-cond__chip' title={`${lastTrain.station}: ${lastTrain.summary}`}>
+                    🚃 終電 {lastTrain.leaveBy}に出る
                   </span>
                 )}
               </div>

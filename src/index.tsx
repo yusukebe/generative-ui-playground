@@ -33,8 +33,8 @@ app.post('/api/intake', async (c) => {
     purpose: r.purpose ?? '友人',
     mood: r.mood ?? '',
   }
-  const { weather, restaurants } = await preparePlan(c.env, params)
-  return c.json({ ready: true, params, weather, restaurants })
+  const { weather, restaurants, lastTrain } = await preparePlan(c.env, params)
+  return c.json({ ready: true, params, weather, restaurants, lastTrain })
 })
 
 /** 指定 1 バンドのプランを生成してストリーム配信 (見ているバンドだけオンデマンド) */
@@ -44,10 +44,11 @@ app.post('/api/band', async (c) => {
     params?: PlanParams
     weather?: Awaited<ReturnType<typeof preparePlan>>['weather']
     restaurants?: Awaited<ReturnType<typeof preparePlan>>['restaurants']
+    lastTrain?: Awaited<ReturnType<typeof preparePlan>>['lastTrain']
     model?: ModelId
   }>()
-  if (!body.band || !body.params || !body.restaurants) {
-    return c.json({ error: 'band/params/restaurants required' }, 400)
+  if (!body.band || !body.params || !body.restaurants || !body.lastTrain) {
+    return c.json({ error: 'band/params/restaurants/lastTrain required' }, 400)
   }
   return streamBand(
     c.env,
@@ -55,6 +56,7 @@ app.post('/api/band', async (c) => {
     body.params,
     body.weather ?? null,
     body.restaurants,
+    body.lastTrain,
     body.model ?? DEFAULT_MODEL
   )
 })
