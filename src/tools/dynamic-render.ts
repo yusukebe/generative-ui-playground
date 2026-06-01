@@ -278,6 +278,71 @@ export function Ramen({ id }) {
   )
 }
 
+// 天気を自分で取得して suspend するフック (worker から Open-Meteo を直接叩く)
+const _wcache = new Map()
+export function useWeather(date) {
+  let e = _wcache.get(date)
+  if (!e) {
+    e = { done: false, data: null }
+    e.promise = fetch('https://api.open-meteo.com/v1/forecast?latitude=35.4437&longitude=139.638&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FTokyo&forecast_days=16')
+      .then((r) => r.json())
+      .then((d) => {
+        const days = (d.daily && d.daily.time) || []
+        const i = days.indexOf(date)
+        if (i < 0) { e.data = null; return }
+        const code = d.daily.weather_code[i]
+        const label = code === 0 ? '快晴' : code <= 2 ? '晴れ時々曇り' : code === 3 ? '曇り'
+          : code <= 48 ? '霧' : code <= 67 ? '雨' : code <= 77 ? '雪' : code <= 82 ? 'にわか雨'
+          : code <= 99 ? '雷雨' : '不明'
+        const emoji = code === 0 ? '☀️' : code <= 2 ? '🌤️' : code === 3 ? '☁️'
+          : code <= 67 ? '🌧️' : code <= 77 ? '🌨️' : '⛈️'
+        e.data = { date, label, emoji, tempMax: d.daily.temperature_2m_max[i],
+          tempMin: d.daily.temperature_2m_min[i], precipProb: d.daily.precipitation_probability_max[i] }
+      })
+      .catch(() => { e.data = null })
+      .finally(() => { e.done = true })
+    _wcache.set(date, e)
+  }
+  if (!e.done) throw e.promise
+  return e.data
+}
+
+// 天気バナー。date を渡すと中で自分で取得して描画する。**<Suspense> の中で使う**。
+export function Weather({ date }) {
+  const w = useWeather(date)
+  if (!w) return null
+  return (
+    <div style={{ background: 'linear-gradient(135deg,#3b4cca,#5b6ee1)', color: '#fff',
+      borderRadius: 14, padding: '14px 18px', fontWeight: 700, textAlign: 'center' }}>
+      {w.emoji} {w.label} / 最高{w.tempMax}℃ / 最低{w.tempMin}℃ / 降水確率{w.precipProb}%
+    </div>
+  )
+}
+
+// 終電案内。area を渡すと最寄り駅・終電目安を表示 (静的・fetch しないので Suspense 不要)。
+const _trains = [
+  { m: ['関内', '伊勢佐木', '馬車道'], s: '関内駅', t: 'JR根岸線/市営地下鉄 0:00〜0:24頃', l: '23:45' },
+  { m: ['桜木町', '野毛'], s: '桜木町駅', t: 'JR根岸線/市営地下鉄 0:02〜0:26頃', l: '23:45' },
+  { m: ['みなとみらい'], s: 'みなとみらい駅', t: 'みなとみらい線 0:10〜0:30頃', l: '23:50' },
+  { m: ['中華街', '元町', '山下'], s: '元町・中華街駅', t: 'みなとみらい線 0:07頃 (始発)', l: '23:45' },
+  { m: ['横浜'], s: '横浜駅', t: '各線 0:30前後まで', l: '0:00' },
+]
+export function LastTrain({ area }) {
+  const a = area || ''
+  const hit = _trains.find((e) => e.m.some((m) => a.includes(m)))
+  const e = hit || { s: a + '周辺の駅', t: '概ね 0:00〜0:30頃', l: '23:45' }
+  return (
+    <div style={{ border: '1px solid #dce0e8', borderRadius: 12, padding: '12px 14px',
+      background: '#fff', display: 'flex', gap: 10, alignItems: 'center' }}>
+      <span style={{ fontSize: 22 }}>🚃</span>
+      <div>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>終電めやす · {e.s}</div>
+        <div style={{ fontSize: 12, color: '#6b7280' }}>{e.t} ／ お店は <b>{e.l}</b> に出る</div>
+      </div>
+    </div>
+  )
+}
+
 // 手元データの一覧 (fetch も Suspense もしない・即描画)
 export function RestaurantList({ restaurants }) {
   const list = (restaurants || []).filter(Boolean)
@@ -298,7 +363,7 @@ const DOC_CSS = `body{margin:0;background:#f7f8fa;color:#1a1d26;font-family:-app
 function wrapStreamingModule(component: string): string {
   return `import React, { Suspense } from 'react'
 import { renderToReadableStream } from 'react-dom/server.edge'
-import { RestaurantCard, RestaurantList, useRamenShop, CardSkeleton, Ramen } from './restaurant-ui'
+import { RestaurantCard, RestaurantList, useRamenShop, CardSkeleton, Ramen, Weather, LastTrain } from './restaurant-ui'
 
 ${component}
 

@@ -80,6 +80,7 @@ export function Compare() {
   const [band, setBand] = useState<Band>('controlled')
   const [preparing, setPreparing] = useState(false)
   const [toolCalls, setToolCalls] = useState<string[]>([])
+  const [prepareMetric, setPrepareMetric] = useState<{ ms: number; tokens: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const historyRef = useRef<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
@@ -147,6 +148,7 @@ export function Compare() {
   const prepare = async (p: PlanParams) => {
     setPreparing(true)
     setToolCalls([])
+    setPrepareMetric(null)
     let izakaya: Restaurant[] = []
     let ramen: Restaurant[] = []
     try {
@@ -185,6 +187,9 @@ export function Compare() {
             case 'ramen':
               ramen = (ev.restaurants as Restaurant[]) ?? []
               setRestaurants([...izakaya, ...ramen])
+              break
+            case 'prepare-metrics':
+              setPrepareMetric({ ms: ev.ms as number, tokens: ev.tokens as number })
               break
           }
         }
@@ -293,6 +298,7 @@ export function Compare() {
     setResults(EMPTY_RESULTS)
     setPreparing(false)
     setToolCalls([])
+    setPrepareMetric(null)
     setError(null)
     setInput('')
   }
@@ -440,9 +446,19 @@ export function Compare() {
 
               {(preparing || toolCalls.length > 0) && (
                 <div className='tool-activity' data-running={preparing}>
-                  <span className='tool-activity__title'>
-                    {preparing ? '🤖 エージェントがツールでデータ収集中…' : '🤖 収集に使ったツール'}
-                  </span>
+                  <div className='tool-activity__head'>
+                    <span className='tool-activity__title'>
+                      {preparing ? '🤖 エージェントがツールでデータ収集中…' : '🤖 収集に使ったツール'}
+                    </span>
+                    {prepareMetric && (
+                      <span
+                        className='band-metric'
+                        title='データ収集(ツール呼び出し)のコスト。1クエリ1回・全バンド共通の前段コスト'
+                      >
+                        共通 ⏱ {(prepareMetric.ms / 1000).toFixed(1)}s · 🔢 {prepareMetric.tokens} tok
+                      </span>
+                    )}
+                  </div>
                   <div className='tool-activity__list'>
                     {toolCalls.map((name, i) => (
                       <span key={i} className='tool-activity__chip'>
@@ -459,9 +475,9 @@ export function Compare() {
                 {activeMetric && (
                   <span
                     className='band-metric'
-                    title='このバンドの生成にかかった時間 / 出力トークン / 出力文字数'
+                    title='このバンドの「生成」コスト (データ収集は上の共通コスト)。AIが描画を吐くのにかかった時間 / 出力トークン / 出力文字数'
                   >
-                    ⏱ {(activeMetric.ms / 1000).toFixed(1)}s · 🔢 {activeMetric.tokens} tok · 📝{' '}
+                    生成 ⏱ {(activeMetric.ms / 1000).toFixed(1)}s · 🔢 {activeMetric.tokens} tok · 📝{' '}
                     {activeMetric.chars.toLocaleString()} chars
                   </span>
                 )}

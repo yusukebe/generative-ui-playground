@@ -975,6 +975,13 @@ body,
 .tool-activity[data-running='true'] {
   border-color: var(--accent);
 }
+.tool-activity__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 .tool-activity__title {
   font-size: 12px;
   font-weight: 600;
@@ -1309,11 +1316,8 @@ body,
   word-break: break-word;
 }
 
-/* 条件＋バンドタブを上部に固定 (長いプランをスクロールしても切替できる) */
+/* 条件＋バンドタブ (固定はしない・プランと一緒にスクロール) */
 .plan-head {
-  position: sticky;
-  top: 0;
-  z-index: 5;
   background: var(--bg);
   padding: 6px 0 10px;
   margin: 0 -2px;
