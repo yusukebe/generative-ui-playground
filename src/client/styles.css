@@ -114,11 +114,27 @@ body,
   gap: 12px;
 }
 .chat__status {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
   background: var(--surface-2);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.chat__status[data-status='ready'] {
+  color: #5fd17a;
+  background: rgba(95, 209, 122, 0.08);
+}
+.chat__status[data-status='streaming'],
+.chat__status[data-status='submitted'] {
+  color: #f5c542;
+  background: rgba(245, 197, 66, 0.1);
+}
+.chat__status[data-status='error'] {
+  color: #ff7a7a;
+  background: rgba(255, 122, 122, 0.1);
 }
 
 .chat__clear,
@@ -197,6 +213,34 @@ body,
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.message__band {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-weight: 500;
+}
+.band-controlled {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5a8ff;
+}
+.band-declarative {
+  background: rgba(95, 209, 178, 0.15);
+  color: #6fd9b8;
+}
+.band-open-ended {
+  background: rgba(245, 159, 66, 0.15);
+  color: #ffaf5f;
+}
+.band-dynamic {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(245, 66, 245, 0.25));
+  color: #fff;
+  font-weight: 600;
 }
 .message__body {
   background: var(--assistant-bg);

@@ -307,17 +307,37 @@ export function Chat() {
   )
 }
 
+function detectMessageMode(parts: MessagePart[]): { label: string; bandClass: string } | null {
+  // parts 全体をスキャンして、より specific な (バンド特性が強い) tool を優先する
+  const types = new Set(parts.map((p) => p.type))
+  if (types.has('tool-dynamic_render')) return { label: 'Dynamic ✨', bandClass: 'dynamic' }
+  if (types.has('tool-render_html')) return { label: 'Open-Ended', bandClass: 'open-ended' }
+  if (types.has('tool-render_ui')) return { label: 'Declarative', bandClass: 'declarative' }
+  if (types.has('tool-search_restaurants')) return { label: 'Controlled', bandClass: 'controlled' }
+  return null
+}
+
 function MessageBubble({
   message,
 }: {
   message: { id: string; role: string; parts: MessagePart[] }
 }) {
+  const mode = message.role === 'assistant' ? detectMessageMode(message.parts) : null
+  // Declarative / Open-Ended / Dynamic では search_restaurants の生結果は隠す
+  // (後続の render_ui / render_html / dynamic_render が UI を再構成するため)
+  const types = new Set(message.parts.map((p) => p.type))
+  const hideSearchOutput =
+    types.has('tool-render_ui') || types.has('tool-render_html') || types.has('tool-dynamic_render')
+
   return (
     <div className='message' data-role={message.role}>
-      <div className='message__role'>{message.role === 'user' ? 'あなた' : 'AI'}</div>
+      <div className='message__role'>
+        <span>{message.role === 'user' ? 'あなた' : 'AI'}</span>
+        {mode && <span className={`message__band band-${mode.bandClass}`}>{mode.label}</span>}
+      </div>
       <div className='message__body'>
         {message.parts.map((part, i) => (
-          <PartView key={i} part={part} />
+          <PartView key={i} part={part} hideSearchOutput={hideSearchOutput} />
         ))}
       </div>
     </div>
@@ -377,7 +397,7 @@ function DynamicRenderView({ part }: { part: ToolPart }) {
   )
 }
 
-function PartView({ part }: { part: MessagePart }) {
+function PartView({ part, hideSearchOutput }: { part: MessagePart; hideSearchOutput?: boolean }) {
   if (part.type === 'text') {
     return <span className='part-text'>{(part as { text: string }).text}</span>
   }
@@ -392,6 +412,9 @@ function PartView({ part }: { part: MessagePart }) {
     const tp = part as ToolPart
     const toolName = part.type.replace(/^tool-/, '')
     if (tp.state === 'input-streaming' || tp.state === 'input-available') {
+      // search_restaurants の "実行中" 表示は Declarative/Open-Ended/Dynamic では隠す
+      // (短時間で終わるノイズなため)
+      if (toolName === 'search_restaurants' && hideSearchOutput) return null
       return (
         <div className='tool-progress'>
           <span className='tool-progress__icon'>⚙️</span>
@@ -405,8 +428,9 @@ function PartView({ part }: { part: MessagePart }) {
     if (tp.state === 'output-available') {
       // Dynamic バンド (LLM が書く Worker module を SSR 実行)
       if (toolName === 'dynamic_render') return <DynamicRenderView part={tp} />
-      // Controlled バンド
+      // Controlled バンド (Declarative/Open-Ended/Dynamic では搬送路扱いで隠す)
       if (toolName === 'search_restaurants') {
+        if (hideSearchOutput) return null
         const output = tp.output as { restaurants?: Restaurant[] } | undefined
         if (output?.restaurants) return <RestaurantList restaurants={output.restaurants} />
       }
