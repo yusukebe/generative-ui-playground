@@ -40,7 +40,7 @@ CopilotKit が提唱する [**Generative UI Spectrum**](https://www.copilotkit.a
 - React 19 + Vite
 - [Cloudflare Agents SDK](https://developers.cloudflare.com/agents/) (Durable Object として Agent を保持)
 - [@cloudflare/worker-bundler](https://www.npmjs.com/package/@cloudflare/worker-bundler) + [Worker Loader](https://developers.cloudflare.com/workers/runtime-apis/bindings/worker-loader/) (Dynamic バンドで LLM の Worker module を runtime バンドル → spawn → fetch)
-- Workers AI (Kimi K2.6 / Llama 4 Scout / Llama 3.3 70B / Llama 3.1 8B / Gemma 3 / Qwen 2.5 Coder)
+- Workers AI (Llama 3.3 70B fp8 fast / Llama 4 Scout / Llama 3.1 8B / Gemma 3 / Qwen 2.5 Coder)
 - D1 (レストラン) + R2 (写真)
 
 ## 開発
@@ -235,7 +235,7 @@ src/
   index.tsx                 Hono Worker entry。/agents/* を hono-agents へ
   agent.ts                  RestaurantAgent (4 バンドで tools と prompt を分岐)
   modes.ts                  Mode 型 (4 バンド) + MODES 一覧
-  models.ts                 Model レジストリ (6 モデル, default は Kimi K2.6)
+  models.ts                 Model レジストリ (5 モデル, default は Llama 3.3 70B fp8 fast)
   types.ts                  Restaurant 型 + D1 行 → Restaurant のマッパ
   ui-components.tsx         共有 UI コンポーネント (Chat + Dynamic Worker 両方で使う)
                             ※ インラインスタイル、React のみ依存、self-contained

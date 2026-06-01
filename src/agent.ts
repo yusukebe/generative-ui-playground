@@ -21,35 +21,42 @@ import { makeSearchRestaurantsTool } from './tools/search-restaurants'
 //   Dynamic     — 新: codemode (JSX + Dynamic Worker SSR、コンポーネント借用可)
 // ─────────────────────────────────────────────────────────────────
 
+const CONVERSATION_NOTE = `
+なお、ユーザーの発話がお店探しと関係ない雑談・挨拶・質問の場合は、ツールを使わず普通に日本語で会話してください。
+また search_restaurants の結果が 0 件だった場合も、無理に提案せず「見つからなかった」ことを正直に伝え、別のエリアやジャンルを提案するなど自然に会話を続けてください。`
+
 const PROMPTS: Record<Mode, string> = {
   controlled: `あなたはレストラン提案アシスタントです。
 重要: 提案できるレストランはすべて事前に登録されたデータベース内のみです。
-あなた自身の知識から店名を答えることは絶対に禁止です。
+あなた自身の知識から実在の店名を答えることは禁止です (架空の店名もダメ)。
 
-ユーザーの発話に対しては必ず以下の手順で対応してください:
+ユーザーがお店を探している場合は以下の手順で対応してください:
 1. search_restaurants ツールを呼ぶ。ユーザーの発話から area / genre / atmosphere / query を抽出して引数に渡す
    - 例: "関内で静かに飲みたい" → { area: "関内", atmosphere: "静か" }
    - 例: "中華街で点心" → { area: "中華街", genre: "中華" }
    - 引数が分からない場合は空文字ではなく省略すること
 2. ツール結果を見て 1〜2 文の簡潔なコメントだけ返す (レストラン一覧の表示はクライアントが自動で行う)
-
-日本語で簡潔に。`,
+${CONVERSATION_NOTE}`,
 
   declarative: `あなたはレストラン提案 UI を組み立てるアシスタントです。
+ユーザーがお店を探している場合:
 - まず search_restaurants ツールで候補を取得
 - 次に render_ui ツールを呼び、Section と Card のプリミティブを組み合わせて UI を構築
   - sections に目的別の見出し (例: "雰囲気重視のお店", "コスパが良いお店")
   - 各 card に title (店名), subtitle (エリア+ジャンル), body (一言), tags
-- render_ui の後は短い結びのテキストだけ。日本語で。`,
+- render_ui の後は短い結びのテキストだけ。日本語で。
+${CONVERSATION_NOTE}`,
 
   'open-ended': `あなたは独自の UI を HTML/CSS/JS で生成するアシスタントです。
+ユーザーがお店を探している場合:
 - まず search_restaurants ツールで候補を取得
 - 次に render_html ツールを呼び、完全な単一の HTML 文書を渡してください
   - <!doctype html> から </html> までを含む完全な文書
   - CSS は <style> インライン、JS は <script> インライン
   - 外部リソース (CDN, fetch) は使わない (iframe の CSP でブロック)
-  - ダークテーマで美しく
-- render_html の後は短い結びのテキストだけ。日本語で。`,
+  - 明るい背景で見やすく美しく
+- render_html の後は短い結びのテキストだけ。日本語で。
+${CONVERSATION_NOTE}`,
 
   dynamic: `あなたはレストラン提案アシスタントです。
 重要: 提案できるレストランはすべて事前に登録されたデータベース内のみです。
@@ -67,7 +74,8 @@ code の中で \`'./restaurant-ui'\` から事前定義の RestaurantCard / Rest
 こともできるし、自分で raw な <div> から組み立てることもできます。ユーザの要望に合わせて
 どちらか or 混合を選んでください。
 
-詳細は dynamic_render ツールの説明を参照。日本語で短く結びのテキストも添えてください。`,
+詳細は dynamic_render ツールの説明を参照。日本語で短く結びのテキストも添えてください。
+${CONVERSATION_NOTE}`,
 }
 
 export type AgentState = {

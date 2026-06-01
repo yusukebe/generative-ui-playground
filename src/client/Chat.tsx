@@ -1,6 +1,7 @@
 import { useAgentChat } from '@cloudflare/ai-chat/react'
 import { useAgent } from 'agents/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Streamdown } from 'streamdown'
 import type { RestaurantAgent } from '../agent'
 import { DEFAULT_MODE, type Mode } from '../modes'
 import { DEFAULT_MODEL, type ModelId } from '../models'
@@ -165,6 +166,8 @@ export function Chat() {
     setAdminToken(t)
   }
 
+  const statusText = isRegistering ? 'registering' : !error && status === 'error' ? 'ready' : status
+
   return (
     <div
       className='chat'
@@ -201,13 +204,8 @@ export function Chat() {
           >
             {isAdmin ? '🔓 Admin' : '🔒'}
           </button>
-          <span
-            className='chat__status'
-            data-status={
-              isRegistering ? 'streaming' : !error && status === 'error' ? 'ready' : status
-            }
-          >
-            {isRegistering ? 'registering' : !error && status === 'error' ? 'ready' : status}
+          <span className='chat__status' data-status={statusText}>
+            {statusText}
           </span>
         </div>
       </header>
@@ -424,7 +422,11 @@ function DynamicRenderView({ part }: { part: ToolPart }) {
 
 function PartView({ part, hideSearchOutput }: { part: MessagePart; hideSearchOutput?: boolean }) {
   if (part.type === 'text') {
-    return <span className='part-text'>{(part as { text: string }).text}</span>
+    return (
+      <div className='part-text'>
+        <Streamdown>{(part as { text: string }).text}</Streamdown>
+      </div>
+    )
   }
   if (part.type === 'file') {
     const fp = part as FilePart

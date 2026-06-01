@@ -1,7 +1,6 @@
 export type ModelId =
-  | '@cf/moonshotai/kimi-k2.6'
-  | '@cf/meta/llama-4-scout-17b-16e-instruct'
   | '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
+  | '@cf/meta/llama-4-scout-17b-16e-instruct'
   | '@cf/meta/llama-3.1-8b-instruct'
   | '@cf/google/gemma-3-12b-it'
   | '@cf/qwen/qwen2.5-coder-32b-instruct'
@@ -15,10 +14,10 @@ export type ModelInfo = {
 
 export const MODELS: ModelInfo[] = [
   {
-    id: '@cf/moonshotai/kimi-k2.6',
-    label: 'Kimi K2.6',
-    vendor: 'Moonshot AI',
-    description: '1T MoE · 多段ツール対応',
+    id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+    label: 'Llama 3.3 70B',
+    vendor: 'Meta',
+    description: '70B fp8 fast · 高品質で速い',
   },
   {
     id: '@cf/meta/llama-4-scout-17b-16e-instruct',
@@ -27,16 +26,10 @@ export const MODELS: ModelInfo[] = [
     description: '17B MoE · 万能型',
   },
   {
-    id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
-    label: 'Llama 3.3 70B',
-    vendor: 'Meta',
-    description: '70B fp8 · 高品質',
-  },
-  {
     id: '@cf/meta/llama-3.1-8b-instruct',
     label: 'Llama 3.1 8B',
     vendor: 'Meta',
-    description: '8B · 軽量・高速',
+    description: '8B · 軽量・最速',
   },
   {
     id: '@cf/google/gemma-3-12b-it',

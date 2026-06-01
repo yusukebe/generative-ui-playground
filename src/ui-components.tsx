@@ -28,13 +28,13 @@ export type Restaurant = {
 }
 
 const colors = {
-  bg: '#0f1117',
-  surface: '#161922',
-  surface2: '#1d2230',
-  border: '#2a3040',
-  text: '#e6e8ee',
-  muted: '#8a92a6',
-  accent: '#6366f1',
+  bg: '#f7f8fa',
+  surface: '#ffffff',
+  surface2: '#eef0f4',
+  border: '#dce0e8',
+  text: '#1a1d26',
+  muted: '#6b7280',
+  accent: '#f97316',
 }
 
 export function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {

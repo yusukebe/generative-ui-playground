@@ -43,7 +43,7 @@ export default {
   async fetch(request) {
     const { restaurants } = await request.json()
     const html = renderToString(
-      <div style={{ background: '#0f1117', color: '#e6e8ee', padding: 24, minHeight: '100vh' }}>
+      <div style={{ background: '#f7f8fa', color: '#1a1d26', padding: 24, minHeight: '100vh' }}>
         <h1>関内のおすすめ</h1>
         <RestaurantList restaurants={restaurants} />
       </div>
@@ -61,13 +61,13 @@ export default {
   async fetch(request) {
     const { restaurants } = await request.json()
     const html = renderToString(
-      <div style={{ background: '#0f1117', color: '#e6e8ee', padding: 24 }}>
+      <div style={{ background: '#f7f8fa', color: '#1a1d26', padding: 24 }}>
         <h1>関内のおすすめ</h1>
         <div style={{ display: 'grid', gap: 12 }}>
           {restaurants.map(r => (
-            <article key={r.id} style={{ padding: 16, background: '#1d2230', borderRadius: 12 }}>
+            <article key={r.id} style={{ padding: 16, background: '#fff', border: '1px solid #dce0e8', borderRadius: 12 }}>
               <h3 style={{ margin: 0 }}>{r.name}</h3>
-              <p style={{ color: '#8a92a6', fontSize: 12, margin: '4px 0' }}>{r.area} / {r.genre}</p>
+              <p style={{ color: '#6b7280', fontSize: 12, margin: '4px 0' }}>{r.area} / {r.genre}</p>
               <p style={{ margin: 0 }}>{r.note}</p>
             </article>
           ))}

@@ -14,7 +14,7 @@ bun run dev               # http://localhost:5173/
 
 ## デフォルト
 
-- **モデル**: Kimi K2.6 (1T MoE, multi-turn tool calling が安定)
+- **モデル**: Llama 3.3 70B fp8 fast (速度と品質のバランス)
 - **モード**: Controlled
 
 ## 4 バンドそれぞれの動作確認 (ステージ前のリハーサル)
@@ -30,12 +30,12 @@ bun run dev               # http://localhost:5173/
 
 ### 想定挙動
 
-| バンド | LLM の挙動 | 描画 | 所要時間 (目安) |
-| --- | --- | --- | --- |
-| **Controlled** | search_restaurants を呼ぶだけ | RestaurantList が並ぶ | 数秒 |
-| **Declarative** | search → render_ui で Section/Card ツリー | DeclarativeView (色付き Section) | 10〜20 秒 |
-| **Open-Ended** | search → render_html で HTML 全文 | iframe (独自デザイン) | 20〜40 秒 |
-| **Dynamic ✨** | dynamic_render で Worker module を書く | iframe (SSR 結果) | 30〜60 秒 (初回 npm fetch あり) |
+| バンド          | LLM の挙動                                | 描画                             | 所要時間 (目安)                 |
+| --------------- | ----------------------------------------- | -------------------------------- | ------------------------------- |
+| **Controlled**  | search_restaurants を呼ぶだけ             | RestaurantList が並ぶ            | 数秒                            |
+| **Declarative** | search → render_ui で Section/Card ツリー | DeclarativeView (色付き Section) | 10〜20 秒                       |
+| **Open-Ended**  | search → render_html で HTML 全文         | iframe (独自デザイン)            | 20〜40 秒                       |
+| **Dynamic ✨**  | dynamic_render で Worker module を書く    | iframe (SSR 結果)                | 30〜60 秒 (初回 npm fetch あり) |
 
 ### Dynamic の初回コスト
 
@@ -104,4 +104,4 @@ bun run deploy
 - [ ] フォームレス登録デモを 1 回試す
 - [ ] ステージ環境のネットワーク状況 (会場 Wi-Fi が速いか)
 - [ ] 画面解像度に合わせて拡大率 (Ctrl/Cmd + +) を調整
-- [ ] バックアップ: Kimi 失敗時に切り替えるモデル候補 (Llama 4 Scout / Llama 3.3 70B)
+- [ ] バックアップ: 失敗時に切り替えるモデル候補 (Llama 4 Scout / Gemma 3 12B)
