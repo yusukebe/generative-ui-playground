@@ -9,7 +9,7 @@ import {
   type AddRestaurantInput,
   type AddRestaurantResult,
 } from './tools/add-restaurant'
-import { makeReactCodeTool } from './tools/code-mode-react'
+import { makeDynamicRenderTool } from './tools/dynamic-render'
 import { renderHTMLTool, renderUITool } from './tools/render-ui'
 import { makeSearchRestaurantsTool } from './tools/search-restaurants'
 
@@ -23,13 +23,14 @@ import { makeSearchRestaurantsTool } from './tools/search-restaurants'
 
 const PROMPTS: Record<Mode, string> = {
   controlled: `あなたはレストラン提案アシスタントです。
-重要: 提案できるレストランはすべて D1 データベースに登録されています。
+重要: 提案できるレストランはすべて事前に登録されたデータベース内のみです。
 あなた自身の知識から店名を答えることは絶対に禁止です。
 
 ユーザーの発話に対しては必ず以下の手順で対応してください:
-1. search_restaurants ツールを呼ぶ (area / genre / atmosphere / query を抽出)
-   - 例: "関内で静かに飲みたい" → area="関内", atmosphere="静か"
-   - 例: "中華街で点心" → area="中華街", genre="中華"
+1. search_restaurants ツールを呼ぶ。ユーザーの発話から area / genre / atmosphere / query を抽出して引数に渡す
+   - 例: "関内で静かに飲みたい" → { area: "関内", atmosphere: "静か" }
+   - 例: "中華街で点心" → { area: "中華街", genre: "中華" }
+   - 引数が分からない場合は空文字ではなく省略すること
 2. ツール結果を見て 1〜2 文の簡潔なコメントだけ返す (レストラン一覧の表示はクライアントが自動で行う)
 
 日本語で簡潔に。`,
@@ -51,14 +52,22 @@ const PROMPTS: Record<Mode, string> = {
 - render_html の後は短い結びのテキストだけ。日本語で。`,
 
   dynamic: `あなたはレストラン提案アシスタントです。
-重要: 提案できるレストランはすべて D1 データベースに登録されています。
+重要: 提案できるレストランはすべて事前に登録されたデータベース内のみです。
 あなた自身の知識から店名を答えることは絶対に禁止です。
 
-唯一のツール codemode に JSX を含む async アロー関数を渡してください。
-関数は Cloudflare Dynamic Worker (隔離サンドボックス) で実行され、React 環境と
-事前定義コンポーネント (RestaurantCard, RestaurantList) が利用可能です。
+dynamic_render ツールを 1 回呼んでください。引数は以下の 2 つ:
+- search: { area?, genre?, atmosphere?, query? } を抽出 (ユーザ発話から)
+- code: 完全な Cloudflare Worker module の TSX ソース (React JSX を含む)
 
-詳細は codemode ツールの説明を参照してください。日本語で短く結びのテキストも添えてください。`,
+ホスト側で search を実行して restaurants を取得し、あなたが書いた code を Cloudflare
+Dynamic Worker (隔離サンドボックス) に流し込んで実行します。Worker は React で SSR し
+text/html を返します。
+
+code の中で \`'./restaurant-ui'\` から事前定義の RestaurantCard / RestaurantList を借りる
+こともできるし、自分で raw な <div> から組み立てることもできます。ユーザの要望に合わせて
+どちらか or 混合を選んでください。
+
+詳細は dynamic_render ツールの説明を参照。日本語で短く結びのテキストも添えてください。`,
 }
 
 export type AgentState = {
@@ -88,12 +97,8 @@ export class RestaurantAgent extends AIChatAgent<CloudflareBindings, AgentState>
     } else if (mode === 'open-ended') {
       tools = { search_restaurants: searchTool, render_html: renderHTMLTool }
     } else {
-      // dynamic: Code Mode + Dynamic Worker + JSX
-      const codemode = await makeReactCodeTool({
-        tools: { search_restaurants: searchTool },
-        loader: this.env.LOADER,
-      })
-      tools = { codemode }
+      // dynamic: LLM が完全な Worker module を書き、Dynamic Worker で SSR 実行
+      tools = { dynamic_render: makeDynamicRenderTool(this.env) }
     }
 
     const result = streamText({

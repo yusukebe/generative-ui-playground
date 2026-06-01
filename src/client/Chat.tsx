@@ -342,95 +342,38 @@ type MessagePart =
   | ToolPart
   | { type: string; [k: string]: unknown }
 
-function CodeModeView({ part }: { part: ToolPart }) {
-  const input = part.input as { code?: string } | undefined
-  const output = part.output
-  const code = input?.code
-
-  const peel = (v: unknown): unknown => {
-    if (v && typeof v === 'object' && 'result' in v) {
-      return (v as { result: unknown }).result
-    }
-    return v
-  }
-  const actual = peel(output)
+/**
+ * Dynamic バンド: LLM が書いた Worker module の SSR 結果を表示。
+ * - input.code: LLM が書いた TSX ソース
+ * - output.body: Worker の Response body (HTML)
+ * - output.contentType: Worker の Response Content-Type
+ */
+function DynamicRenderView({ part }: { part: ToolPart }) {
+  const input = part.input as { code?: string; search?: unknown } | undefined
+  const output = part.output as
+    | { contentType?: string; body?: string; restaurants?: Restaurant[]; code?: string }
+    | undefined
+  const code = input?.code ?? output?.code
 
   return (
     <div className='codemode'>
       {code && (
         <details className='codemode__code' open>
-          <summary>🧠 Agent が生成したコード</summary>
+          <summary>🧠 Agent が書いた Worker module (TSX)</summary>
           <pre>
             <code>{code}</code>
           </pre>
         </details>
       )}
-      <CodeModeOutput output={actual} />
+      {output?.body && output.contentType?.includes('html') ? (
+        <OpenEndedView html={output.body} />
+      ) : (
+        <details className='tool-result'>
+          <summary>Dynamic Worker の Response</summary>
+          <pre>{output?.body ?? JSON.stringify(output, null, 2)}</pre>
+        </details>
+      )}
     </div>
-  )
-}
-
-/**
- * 擬似 Response { contentType, body } をクライアント側で「描画」する。
- * Content-Type ベースで描画ロジックを分岐する。
- */
-function CodeModeOutput({ output }: { output: unknown }) {
-  if (output && typeof output === 'object') {
-    const o = output as Record<string, unknown>
-    if (typeof o.contentType === 'string' && typeof o.body === 'string') {
-      return <ResponseView contentType={o.contentType} body={o.body} />
-    }
-    // 後方互換 (古いフォーマット)
-    if (Array.isArray(o.restaurants)) {
-      return <RestaurantList restaurants={o.restaurants as Restaurant[]} />
-    }
-    if (Array.isArray(o.sections)) {
-      return <DeclarativeView ui={o as DeclarativeUI} />
-    }
-    if (typeof o.html === 'string') {
-      return <OpenEndedView html={o.html} />
-    }
-  }
-
-  return (
-    <details className='tool-result'>
-      <summary>実行結果 (生データ)</summary>
-      <pre>{JSON.stringify(output, null, 2)}</pre>
-    </details>
-  )
-}
-
-function ResponseView({ contentType, body }: { contentType: string; body: string }) {
-  const ct = contentType.toLowerCase()
-  if (ct.startsWith('text/html')) {
-    return <OpenEndedView html={body} />
-  }
-  if (ct.includes('gui-tree') || ct.includes('declarative')) {
-    try {
-      const ui = JSON.parse(body) as DeclarativeUI
-      return <DeclarativeView ui={ui} />
-    } catch {
-      /* fall through */
-    }
-  }
-  if (ct.includes('json')) {
-    try {
-      const data = JSON.parse(body) as Record<string, unknown>
-      if (Array.isArray(data.restaurants)) {
-        return <RestaurantList restaurants={data.restaurants as Restaurant[]} />
-      }
-      if (Array.isArray(data.sections)) {
-        return <DeclarativeView ui={data as unknown as DeclarativeUI} />
-      }
-    } catch {
-      /* fall through */
-    }
-  }
-  return (
-    <details className='tool-result'>
-      <summary>{contentType}</summary>
-      <pre>{body}</pre>
-    </details>
   )
 }
 
@@ -460,8 +403,8 @@ function PartView({ part }: { part: MessagePart }) {
       return <div className='tool-error'>ツールエラー: {tp.errorText ?? 'unknown'}</div>
     }
     if (tp.state === 'output-available') {
-      // Dynamic バンド (Code Mode)
-      if (toolName === 'codemode') return <CodeModeView part={tp} />
+      // Dynamic バンド (LLM が書く Worker module を SSR 実行)
+      if (toolName === 'dynamic_render') return <DynamicRenderView part={tp} />
       // Controlled バンド
       if (toolName === 'search_restaurants') {
         const output = tp.output as { restaurants?: Restaurant[] } | undefined
