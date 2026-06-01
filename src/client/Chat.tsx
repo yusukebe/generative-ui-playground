@@ -2,14 +2,16 @@ import { useAgentChat } from '@cloudflare/ai-chat/react'
 import { useAgent } from 'agents/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { RestaurantAgent } from '../agent'
+import { DEFAULT_MODE, type Mode } from '../modes'
 import { DEFAULT_MODEL, type ModelId } from '../models'
 import type { DeclarativeUI } from '../schemas/declarative'
 import { RestaurantList, type Restaurant } from '../ui-components'
 import { ModelSelector } from './ModelSelector'
+import { ModeSelector } from './ModeSelector'
 import { DeclarativeView } from './modes/DeclarativeView'
 import { OpenEndedView } from './modes/OpenEndedView'
 
-type AgentSyncState = { model: ModelId }
+type AgentSyncState = { model: ModelId; mode: Mode }
 
 function fileToDataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -23,6 +25,7 @@ function fileToDataURL(file: File): Promise<string> {
 const ADMIN_TOKEN_KEY = 'generative-ui-playground:admin-token'
 
 export function Chat() {
+  const [mode, setMode] = useState<Mode>(DEFAULT_MODE)
   const [model, setModel] = useState<ModelId>(DEFAULT_MODEL)
   const [adminToken, setAdminToken] = useState<string | null>(() =>
     typeof window === 'undefined' ? null : localStorage.getItem(ADMIN_TOKEN_KEY)
@@ -34,6 +37,7 @@ export function Chat() {
     name: 'default',
     onStateUpdate: ((state: AgentSyncState) => {
       if (state?.model) setModel(state.model)
+      if (state?.mode) setMode(state.mode)
     }) as never,
   })
 
@@ -126,7 +130,12 @@ export function Chat() {
 
   const handleModelChange = (id: ModelId) => {
     setModel(id)
-    setAgentState({ model: id })
+    setAgentState({ model: id, mode })
+  }
+
+  const handleModeChange = (m: Mode) => {
+    setMode(m)
+    setAgentState({ model, mode: m })
   }
 
   const handleFile = (file: File | null) => {
@@ -172,6 +181,7 @@ export function Chat() {
     >
       <header className='chat__header'>
         <span className='chat__title'>レストラン提案</span>
+        <ModeSelector value={mode} onChange={handleModeChange} />
         <div className='chat__header-right'>
           <ModelSelector value={model} onChange={handleModelChange} />
           <button
@@ -450,11 +460,22 @@ function PartView({ part }: { part: MessagePart }) {
       return <div className='tool-error'>ツールエラー: {tp.errorText ?? 'unknown'}</div>
     }
     if (tp.state === 'output-available') {
+      // Dynamic バンド (Code Mode)
       if (toolName === 'codemode') return <CodeModeView part={tp} />
-      // 直接的な search_restaurants 結果が直で返ってきた場合のフォールバック
+      // Controlled バンド
       if (toolName === 'search_restaurants') {
         const output = tp.output as { restaurants?: Restaurant[] } | undefined
         if (output?.restaurants) return <RestaurantList restaurants={output.restaurants} />
+      }
+      // Declarative バンド
+      if (toolName === 'render_ui') {
+        const output = tp.output as DeclarativeUI | undefined
+        if (output) return <DeclarativeView ui={output} />
+      }
+      // Open-Ended バンド
+      if (toolName === 'render_html') {
+        const output = tp.output as { html?: string } | undefined
+        if (output?.html) return <OpenEndedView html={output.html} />
       }
       return (
         <details className='tool-result'>
