@@ -203,7 +203,9 @@ export function Chat() {
           </button>
           <span
             className='chat__status'
-            data-status={isRegistering ? 'streaming' : !error && status === 'error' ? 'ready' : status}
+            data-status={
+              isRegistering ? 'streaming' : !error && status === 'error' ? 'ready' : status
+            }
           >
             {isRegistering ? 'registering' : !error && status === 'error' ? 'ready' : status}
           </span>

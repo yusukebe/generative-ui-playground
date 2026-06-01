@@ -36,52 +36,89 @@ body,
 .sidebar {
   background: var(--surface);
   border-right: 1px solid var(--border);
-  padding: 16px;
+  padding: 20px 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+  overflow-y: auto;
 }
 
 .sidebar__header {
   font-weight: 600;
-  font-size: 14px;
-  color: var(--text-muted);
+  font-size: 13px;
+  color: var(--text);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
-.sidebar__new {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 10px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  text-align: left;
-}
-.sidebar__new:hover {
-  background: var(--border);
+.sidebar__lead {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted);
 }
 
-.sidebar__sessions {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+.sidebar__bands {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 10px;
+  margin-top: 4px;
 }
-.sidebar__session {
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 13px;
+.sidebar__bands-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   color: var(--text-muted);
-  cursor: pointer;
+  margin-bottom: 4px;
 }
-.sidebar__session--active {
+.sidebar__band {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border-radius: 8px;
   background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.sidebar__band-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+.sidebar__band-text {
+  flex: 1;
+  min-width: 0;
+}
+.sidebar__band-label {
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text);
+}
+.sidebar__band-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-top: 2px;
+}
+
+.sidebar__footer {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sidebar__link {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 4px 0;
+}
+.sidebar__link:hover {
+  color: var(--accent);
 }
 
 .main {
