@@ -500,7 +500,7 @@ function BandPanel({
     scriptLabel = '🧠 AI が埋めたプラン (JSON)'
   } else if (band === 'declarative') {
     preview = results.declarative ? (
-      <DeclarativeView ui={results.declarative} />
+      <DeclarativeView ui={results.declarative} restaurants={restaurants} />
     ) : (
       <Streaming label='UI ツリーを組み立て中…' />
     )

@@ -8,6 +8,8 @@ export const CardSchema = z.object({
   body: z.string().nullable(),
   tags: z.array(z.string()).nullable(),
   variant: z.enum(['default', 'highlight']).nullable(),
+  // 店候補の id。指定すると写真付きの実カードで描画される (ホストが解決)
+  restaurantId: z.string().nullable(),
 })
 
 export const SectionSchema = z.object({

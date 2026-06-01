@@ -235,7 +235,7 @@ export function streamPrepare(
   })
 }
 
-function dataForPrompt(restaurants: Restaurant[]): string {
+function dataForPrompt(restaurants: Restaurant[], includePhoto = false): string {
   return JSON.stringify(
     restaurants.map((r) => ({
       id: r.id,
@@ -246,6 +246,8 @@ function dataForPrompt(restaurants: Restaurant[]): string {
       note: r.note,
       price_range: r.price_range,
       address: r.address,
+      // Open-Ended は自前で <img> を書くため写真URLを渡す (他バンドは id 参照なので不要)
+      ...(includePhoto && r.photo_url ? { photo_url: r.photo_url } : {}),
     }))
   )
 }
@@ -254,7 +256,8 @@ function planContext(
   params: PlanParams,
   weather: Weather | null,
   restaurants: Restaurant[],
-  lastTrain: LastTrain
+  lastTrain: LastTrain,
+  includePhoto = false
 ): string {
   const w = weather
     ? `${weather.emoji} ${weather.label} / 最高${weather.tempMax ?? '?'}℃ 最低${weather.tempMin ?? '?'}℃ / 降水確率${weather.precipProb ?? '?'}%`
@@ -262,7 +265,7 @@ function planContext(
   return `条件: ${params.dateLabel}(${params.date}) / ${params.area} / ${params.partySize}人 / 用途:${params.purpose} / 気分:${params.mood || '指定なし'}
 天気: ${w}
 終電: ${lastTrain.station} … ${lastTrain.summary} (お店を出る目安 ${lastTrain.leaveBy})
-店候補 (この中の店だけ使う・id 必須。genre が「家系ラーメン」の店は〆ラーメン専用): ${dataForPrompt(restaurants)}
+店候補 (この中の店だけ使う・id 必須。genre が「家系ラーメン」の店は〆ラーメン専用): ${dataForPrompt(restaurants, includePhoto)}
 プラン構成: 1軒目・2軒目は居酒屋系から、最後の「〆」は家系ラーメンの店を1つ。**最後に終電メモ(${lastTrain.station}の終電目安と「${lastTrain.leaveBy}には出る」)を必ず添える。**`
 }
 
@@ -338,7 +341,7 @@ ${ctx}`,
 夜のプランを組み立ててください。
 - intro に天気をふまえたプラン概要 (1〜2文)
 - **section は1個だけ** (例: heading="今夜のプラン")。その中に各店を card として並べる
-- 各 card: title=店名 / subtitle="1軒目 · エリア · ジャンル" / body=why(短く) / tags
+- 各 card: title=店名 / subtitle="1軒目 · エリア · ジャンル" / body=why(短く) / tags / **restaurantId=その店の id (必須・写真表示に使う)**
 - 店は 1軒目→2軒目→〆 の順。〆は家系ラーメンの店
 ${COMMON}
 ${ctx}`,
@@ -350,15 +353,18 @@ ${ctx}`,
           send({ type: 'declarative', ui: finalUi })
           metric(await usage, JSON.stringify(finalUi))
         } else if (band === 'open-ended') {
+          // Open-Ended は写真URLも渡し、自前で <img> を全件書く (他バンドは id 参照=軽い)
+          const ctxPhotos = planContext(params, weather, restaurants, lastTrain, true)
           const { textStream, text, usage } = streamText({
             model,
             providerOptions,
             prompt: `あなたは Open-Ended アシスタントです。夜のプランを **完全な単一 HTML 文書**
 (<!doctype html>〜</html>) で表現してください。
 - 天気バナー、各軒(1軒目/2軒目/〆)、移動・予約メモを含む凝ったデザイン
-- CSS は <style> インライン、外部リソース禁止、出力は HTML のみ
+- **各店には写真を必ず入れる**: 候補データの photo_url を使い <img src="(photo_url)" ...> を書く
+- CSS は <style> インライン、外部リソースは画像(photo_url)のみ可、出力は HTML のみ
 ${COMMON}
-${ctx}`,
+${ctxPhotos}`,
           })
           for await (const delta of textStream) send({ type: 'open-ended-delta', delta })
           const html = extractHTML(await text)

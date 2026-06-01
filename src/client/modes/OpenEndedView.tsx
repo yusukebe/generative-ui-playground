@@ -10,7 +10,9 @@ const CSP =
   'font-src data:; ' +
   "connect-src 'none'; " +
   "object-src 'none'; " +
-  "base-uri 'none'; " +
+  // srcdoc には base URL が無いので、写真の相対URL(/api/places-photo) を解決するため
+  // <base href=origin> を注入する。そのため base-uri は self を許可する
+  "base-uri 'self'; " +
   "form-action 'none';"
 
 // iframe が中身の高さを親へ通知するスクリプト (箱っぽさを消して地続きに見せる)
@@ -21,7 +23,9 @@ addEventListener('load',send);setTimeout(send,300);setTimeout(send,1200);send();
 </script>`
 
 function wrapHTML(html: string): string {
-  const inject = `<meta http-equiv="Content-Security-Policy" content="${CSP}">`
+  // srcdoc は base URL を持たないので、相対の写真URL(/api/places-photo)を解決するため base を入れる
+  const base = `<base href="${window.location.origin}/">`
+  const inject = `<meta http-equiv="Content-Security-Policy" content="${CSP}">${base}`
   let out: string
   if (/<head[^>]*>/i.test(html)) out = html.replace(/<head([^>]*)>/i, `<head$1>${inject}`)
   else if (/<html[^>]*>/i.test(html))
