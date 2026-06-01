@@ -32,6 +32,7 @@ type BandResults = {
   dynamicCode: string
   status: Record<Band, Status>
   metrics: Partial<Record<Band, Metric>>
+  ttfr: Partial<Record<Band, number>> // 初描画までの ms (最初の可視コンテンツ)
 }
 
 const EMPTY_RESULTS: BandResults = {
@@ -42,6 +43,7 @@ const EMPTY_RESULTS: BandResults = {
   dynamicCode: '',
   status: { controlled: 'idle', declarative: 'idle', 'open-ended': 'idle', dynamic: 'idle' },
   metrics: {},
+  ttfr: {},
 }
 
 const BANDS: { id: Band; label: string; desc: string }[] = [
@@ -55,7 +57,7 @@ const BANDS: { id: Band; label: string; desc: string }[] = [
 const TOOL_LABELS: Record<string, string> = {
   get_weather: '🌤️ 天気を取得',
   get_last_train: '🚃 終電を取得',
-  search_restaurants: '🍶 居酒屋を検索',
+  search_restaurants: '🍶 お店を検索',
   get_ramen: '🍜 〆ラーメンを取得',
 }
 
@@ -78,9 +80,7 @@ export function Compare() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([])
   const [results, setResults] = useState<BandResults>(EMPTY_RESULTS)
   const [band, setBand] = useState<Band>('controlled')
-  const [preparing, setPreparing] = useState(false)
   const [toolCalls, setToolCalls] = useState<string[]>([])
-  const [prepareMetric, setPrepareMetric] = useState<{ ms: number; tokens: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const historyRef = useRef<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
@@ -88,6 +88,7 @@ export function Compare() {
   const chatLogRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const [chatWidth, setChatWidth] = useState(340)
+  const genStartRef = useRef<Partial<Record<Band, number>>>({})
 
   // 中央のリサイザー: ドラッグでチャット(左)幅を調整
   const startResize = (e: React.MouseEvent) => {
@@ -116,15 +117,6 @@ export function Compare() {
     if (el) el.scrollTop = el.scrollHeight
   }, [convo, intaking])
 
-  // データ収集 (prepare) が終わったら、表示中バンドがまだ idle なら生成を起動
-  useEffect(() => {
-    if (preparing || !params || restaurants.length === 0) return
-    if (results.status[band] === 'idle') {
-      generateBand(band, params, weather, restaurants, lastTrain)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preparing, band, restaurants.length])
-
   const submit = async (text: string) => {
     const t = text.trim()
     if (!t || intaking) return
@@ -149,13 +141,10 @@ export function Compare() {
       if (!data.ready) {
         setConvo([...nextConvo, { role: 'assistant', text: data.question }])
       } else {
-        // 条件確定 → プランヘッダを即表示。データは prepare がツール経由で非同期に集める
+        // 条件確定 → プランヘッダを即表示。表示中バンドが「ツール収集→描画」を毎回実行する
         setParams(data.params)
-        setWeather(null)
-        setLastTrain(null)
-        setRestaurants([])
         setResults(EMPTY_RESULTS)
-        prepare(data.params)
+        generateBand(band, data.params)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'エラー')
@@ -164,21 +153,32 @@ export function Compare() {
     }
   }
 
-  // エージェントがツールでデータを集める prepare ストリームを購読し、解決順にチップ/候補を埋める。
-  // プラン生成 (generateBand) は preparing が終わったら下の effect が起動する。
-  const prepare = async (p: PlanParams) => {
-    setPreparing(true)
+  // 1バンド = 「ツールでデータ収集 → 描画」を毎回まとめて実行する。
+  // ストリームは tool/weather/lasttrain/izakaya/ramen(収集) → render-start → バンド描画 + metrics。
+  const generateBand = async (b: Band, p: PlanParams) => {
+    genStartRef.current[b] = undefined // render-start で計測開始
     setToolCalls([])
-    setPrepareMetric(null)
+    setWeather(null)
+    setLastTrain(null)
+    setRestaurants([])
+    setResults((r) => ({
+      ...r,
+      ...(b === 'controlled' && { controlled: null }),
+      ...(b === 'declarative' && { declarative: null }),
+      ...(b === 'open-ended' && { openEnded: null }),
+      ...(b === 'dynamic' && { dynamicFrameUrl: null, dynamicCode: '' }),
+      status: { ...r.status, [b]: 'streaming' },
+      ttfr: { ...r.ttfr, [b]: undefined },
+    }))
     let izakaya: Restaurant[] = []
     let ramen: Restaurant[] = []
     try {
-      const res = await fetch('/api/prepare', {
+      const res = await fetch('/api/band', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ params: p, model }),
+        body: JSON.stringify({ band: b, params: p, model }),
       })
-      if (!res.ok || !res.body) throw new Error(`prepare ${res.status}`)
+      if (!res.ok || !res.body) throw new Error(`band ${res.status}`)
       const reader = res.body.getReader()
       const dec = new TextDecoder()
       let buf = ''
@@ -209,51 +209,13 @@ export function Compare() {
               ramen = (ev.restaurants as Restaurant[]) ?? []
               setRestaurants([...izakaya, ...ramen])
               break
-            case 'prepare-metrics':
-              setPrepareMetric({ ms: ev.ms as number, tokens: ev.tokens as number })
+            case 'render-start':
+              genStartRef.current[b] = Date.now() // 初描画 TTFR はここから
               break
+            default:
+              onBandEvent(b, ev)
           }
         }
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'prepare エラー')
-    } finally {
-      setPreparing(false)
-    }
-  }
-
-  const generateBand = async (
-    b: Band,
-    p: PlanParams,
-    w: Weather,
-    rs: Restaurant[],
-    lt: LastTrain
-  ) => {
-    setResults((r) => ({
-      ...r,
-      ...(b === 'controlled' && { controlled: null }),
-      ...(b === 'declarative' && { declarative: null }),
-      ...(b === 'open-ended' && { openEnded: null }),
-      ...(b === 'dynamic' && { dynamicFrameUrl: null, dynamicCode: '' }),
-      status: { ...r.status, [b]: 'streaming' },
-    }))
-    try {
-      const res = await fetch('/api/band', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ band: b, params: p, weather: w, restaurants: rs, lastTrain: lt, model }),
-      })
-      if (!res.ok || !res.body) throw new Error(`band ${res.status}`)
-      const reader = res.body.getReader()
-      const dec = new TextDecoder()
-      let buf = ''
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += dec.decode(value, { stream: true })
-        const lines = buf.split('\n')
-        buf = lines.pop() ?? ''
-        for (const l of lines) if (l.trim()) onBandEvent(b, JSON.parse(l))
       }
       setResults((r) => ({
         ...r,
@@ -267,13 +229,20 @@ export function Compare() {
   const onBandEvent = (b: Band, ev: Record<string, unknown>) => {
     setResults((r) => {
       const s = { ...r }
+      // 最初の可視コンテンツが出た時刻を記録 (初描画 TTFR)
+      const markFirst = () => {
+        const t0 = genStartRef.current[b]
+        if (t0 && s.ttfr[b] === undefined) s.ttfr = { ...s.ttfr, [b]: Date.now() - t0 }
+      }
       switch (ev.type) {
         case 'controlled':
           s.controlled = (ev.plan as Plan) ?? null
           if (ev.error) s.status = { ...s.status, controlled: 'error' }
+          else markFirst()
           break
         case 'declarative-partial':
           s.declarative = ev.ui as DeclarativeUI
+          markFirst()
           break
         case 'declarative':
           s.declarative = (ev.ui as DeclarativeUI) ?? s.declarative
@@ -282,6 +251,7 @@ export function Compare() {
         case 'open-ended':
           s.openEnded = (ev.html as string) ?? null
           if (ev.error) s.status = { ...s.status, 'open-ended': 'error' }
+          else markFirst()
           break
         case 'dynamic-delta':
           s.dynamicCode = s.dynamicCode + (ev.delta as string)
@@ -291,6 +261,7 @@ export function Compare() {
           break
         case 'dynamic-frame':
           s.dynamicFrameUrl = ev.url as string
+          markFirst()
           break
         case 'dynamic':
           if (ev.error) s.status = { ...s.status, dynamic: 'error' }
@@ -307,8 +278,11 @@ export function Compare() {
     })
   }
 
-  // バンド切替は表示の切替だけ。未生成なら上の effect が生成を起動する
-  const switchBand = (b: Band) => setBand(b)
+  // バンドを切り替えたら、まだ生成していなければそのバンドを生成 (毎回ツール収集→描画)
+  const switchBand = (b: Band) => {
+    setBand(b)
+    if (params && results.status[b] === 'idle') generateBand(b, params)
+  }
 
   const clear = () => {
     setConvo([])
@@ -317,9 +291,7 @@ export function Compare() {
     setLastTrain(null)
     setRestaurants([])
     setResults(EMPTY_RESULTS)
-    setPreparing(false)
     setToolCalls([])
-    setPrepareMetric(null)
     setError(null)
     setInput('')
   }
@@ -342,6 +314,7 @@ export function Compare() {
     }
   }
 
+  // 「プラン作成」コスト = 収集(ツール) + 生成 の合計 (バックエンドが合算済み)
   const activeMetric = results.metrics[band]
 
   return (
@@ -474,20 +447,14 @@ export function Compare() {
                 </div>
               </div>
 
-              {(preparing || toolCalls.length > 0) && (
-                <div className='tool-activity' data-running={preparing}>
+              {toolCalls.length > 0 && (
+                <div className='tool-activity' data-running={results.status[band] === 'streaming'}>
                   <div className='tool-activity__head'>
                     <span className='tool-activity__title'>
-                      {preparing ? '🤖 エージェントがツールでデータ収集中…' : '🤖 収集に使ったツール'}
+                      {results.status[band] === 'streaming'
+                        ? '🤖 このバンドがツールでデータ収集 → 描画中…'
+                        : '🤖 このバンドが収集に使ったツール (毎回実行)'}
                     </span>
-                    {prepareMetric && (
-                      <span
-                        className='band-metric'
-                        title='データ収集(ツール呼び出し)のコスト。1クエリ1回・全バンド共通の前段コスト'
-                      >
-                        共通 ⏱ {(prepareMetric.ms / 1000).toFixed(1)}s · 🔢 {prepareMetric.tokens} tok
-                      </span>
-                    )}
                   </div>
                   <div className='tool-activity__list'>
                     {toolCalls.map((name, i) => (
@@ -495,22 +462,34 @@ export function Compare() {
                         {TOOL_LABELS[name] ?? name}
                       </span>
                     ))}
-                    {preparing && <span className='tool-activity__chip tool-activity__chip--pending'>…</span>}
+                    {results.status[band] === 'streaming' && (
+                      <span className='tool-activity__chip tool-activity__chip--pending'>…</span>
+                    )}
                   </div>
                 </div>
               )}
 
               <div className='band-tabs__meta'>
                 <p className='band-tabs__desc'>{BANDS.find((b) => b.id === band)?.desc}</p>
-                {activeMetric && (
-                  <span
-                    className='band-metric'
-                    title='このバンドの「生成」コスト (データ収集は上の共通コスト)。AIが描画を吐くのにかかった時間 / 出力トークン / 出力文字数'
-                  >
-                    生成 ⏱ {(activeMetric.ms / 1000).toFixed(1)}s · 🔢 {activeMetric.tokens} tok · 📝{' '}
-                    {activeMetric.chars.toLocaleString()} chars
-                  </span>
-                )}
+                <span className='band-metric-row'>
+                  {results.ttfr[band] !== undefined && (
+                    <span
+                      className='band-metric band-metric--ttfr'
+                      title='初描画: 最初の可視コンテンツが出るまで。streamObject/SSR ストリーミングは速い'
+                    >
+                      ⚡ 初描画 {((results.ttfr[band] as number) / 1000).toFixed(1)}s
+                    </span>
+                  )}
+                  {activeMetric && (
+                    <span
+                      className='band-metric'
+                      title='プラン作成の合計コスト = データ収集(ツール) + このバンドの生成。時間 / トークン / 生成文字数'
+                    >
+                      プラン作成 ⏱ {(activeMetric.ms / 1000).toFixed(1)}s · 🔢 {activeMetric.tokens} tok
+                      · 📝 {activeMetric.chars.toLocaleString()} chars
+                    </span>
+                  )}
+                </span>
               </div>
 
               <BandPanel band={band} results={results} restaurants={restaurants} />

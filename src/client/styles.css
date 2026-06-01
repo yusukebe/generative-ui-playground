@@ -1024,6 +1024,12 @@ body,
   gap: 12px;
   flex-wrap: wrap;
 }
+.band-metric-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
 .band-metric {
   font-size: 11px;
   color: var(--text-muted);
@@ -1033,6 +1039,11 @@ body,
   padding: 4px 10px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+.band-metric--ttfr {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.2);
 }
 
 /* 4バンド比較ビュー */

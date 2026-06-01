@@ -367,6 +367,9 @@ import { RestaurantCard, RestaurantList, useRamenShop, CardSkeleton, Ramen, Weat
 
 ${component}
 
+// AI が App / APP どちらの名前で書いても拾えるようにする (取り違えでフォールバックに落ちない)
+const Root = (typeof App !== 'undefined' && App) || (typeof APP !== 'undefined' && APP)
+
 export default {
   async fetch(request: Request): Promise<Response> {
     const { restaurants, ramens } = (await request.json()) as { restaurants: unknown[]; ramens: any[] }
@@ -376,7 +379,7 @@ export default {
       stream = await renderToReadableStream(
         <html>
           <head><meta charSet="utf-8" /><style dangerouslySetInnerHTML={{ __html: css }} /></head>
-          <body><div style={{ padding: 24 }}><APP restaurants={restaurants} ramens={ramens} /></div></body>
+          <body><div style={{ padding: 24 }}><Root restaurants={restaurants} ramens={ramens} /></div></body>
         </html>
       )
     } catch (e) {
