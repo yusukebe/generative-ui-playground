@@ -82,28 +82,6 @@ export async function findRestaurants(
   return searchRestaurants(env.DB, input)
 }
 
-/**
- * 短命キャッシュつきの検索。Dynamic で「コード生成と店検索を並行」させるための仕組み。
- * streamBand 側でコード生成と同時にこれを呼んでおけば、フレーム描画時(dynamic-frame)は
- * 同じキーで走っている(または完了済みの) Promise を再利用でき、検索待ちが隠れる。
- * (同一 Worker isolate 内のメモリキャッシュ。別 isolate に当たれば普通に再取得=グレースフル)
- */
-const _searchCache = new Map<string, { at: number; p: Promise<Restaurant[]> }>()
-const SEARCH_TTL = 60_000
-
-export function getRestaurantsCached(
-  env: CloudflareBindings,
-  input: SearchInput
-): Promise<Restaurant[]> {
-  const key = `${input.area ?? ''}||${input.query ?? ''}||${input.genre ?? ''}||${input.limit ?? ''}`
-  const hit = _searchCache.get(key)
-  const now = Date.now()
-  if (hit && now - hit.at < SEARCH_TTL) return hit.p
-  const p = findRestaurants(env, input)
-  _searchCache.set(key, { at: now, p })
-  return p
-}
-
 export function makeSearchRestaurantsTool(env: CloudflareBindings) {
   return tool({
     description:

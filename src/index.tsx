@@ -4,7 +4,7 @@ import { runIntake, streamBand, type Band } from './compare'
 import { DEFAULT_MODEL, type ModelId } from './models'
 import type { PlanParams } from './schemas/plan'
 import { renderDynamicComponentStream } from './tools/dynamic-render'
-import { getRestaurantsCached } from './tools/search-restaurants'
+import { findRestaurants } from './tools/search-restaurants'
 
 export { RestaurantAgent } from './agent'
 
@@ -68,8 +68,7 @@ app.get('/api/dynamic-frame', async (c) => {
     return c.notFound()
   }
   // お店(Places=要キー)だけホストが取得して渡す。天気/〆ラーメン(キー不要)は worker が描画時に取得。
-  // streamBand がコード生成と並行で先に検索を始めているので、ここではキャッシュ済みを再利用できる。
-  const izakaya = await getRestaurantsCached(c.env, { area, query: q, limit: 2 })
+  const izakaya = await findRestaurants(c.env, { area, query: q, limit: 2 })
   const { stream } = await renderDynamicComponentStream(c.env, code, izakaya)
   return new Response(stream, {
     headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
