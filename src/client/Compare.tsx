@@ -51,11 +51,12 @@ const BANDS: { id: Band; label: string; desc: string }[] = [
   { id: 'dynamic', label: 'Dynamic ✨', desc: 'AI が React を書き Worker が Suspense SSR' },
 ]
 
+// デモで詰まらないよう、日付・エリア・人数が揃った「一発で通る」例にしておく
 const SAMPLES = [
+  '関内で今日、一人で飲みたい',
   '来週の金曜、関内で4人で接待',
   '今週末 野毛で2人デート',
-  'みなとみらいで一人ゆっくり', // 日付なし → 聞き返し
-  '関内で飲みたい', // 情報不足 → 聞き返し
+  'みなとみらいで明日、3人で女子会',
 ]
 
 export function Compare() {
@@ -76,18 +77,6 @@ export function Compare() {
   const chatLogRef = useRef<HTMLDivElement>(null)
 
   const ready = !!params
-  const isStreaming = intaking || Object.values(results.status).some((s) => s === 'streaming')
-
-  // プラン側: バンドのストリーミング中はコンテンツの伸びを追って下へ (伸びる iframe にも追従)
-  useEffect(() => {
-    if (!isStreaming) return
-    const el = compareRef.current
-    if (!el) return
-    const id = setInterval(() => {
-      el.scrollTop = el.scrollHeight
-    }, 150)
-    return () => clearInterval(id)
-  }, [isStreaming])
 
   // チャット側: 会話が増えたら最下部へ
   useEffect(() => {
