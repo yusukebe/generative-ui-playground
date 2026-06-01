@@ -70,7 +70,21 @@ const SAMPLES = [
 ]
 
 export function Compare() {
-  const [model, setModel] = useState<ModelId>(DEFAULT_MODEL)
+  // モデル選択は localStorage に記憶 (次回も同じモデルで開く)
+  const [model, setModel] = useState<ModelId>(() => {
+    try {
+      return (localStorage.getItem('giup-model') as ModelId) || DEFAULT_MODEL
+    } catch {
+      return DEFAULT_MODEL
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem('giup-model', model)
+    } catch {
+      // localStorage 不可の環境では無視
+    }
+  }, [model])
   const [input, setInput] = useState('')
   const [convo, setConvo] = useState<Turn[]>([])
   const [intaking, setIntaking] = useState(false)
