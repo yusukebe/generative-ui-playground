@@ -19,12 +19,6 @@
       "migrations_dir": "migrations",
     },
   ],
-  "r2_buckets": [
-    {
-      "binding": "PHOTOS",
-      "bucket_name": "generative-ui-playground-photos",
-    },
-  ],
   "worker_loaders": [
     {
       "binding": "LOADER",

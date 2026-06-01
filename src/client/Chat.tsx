@@ -14,24 +14,9 @@ import { OpenEndedView } from './modes/OpenEndedView'
 
 type AgentSyncState = { model: ModelId; mode: Mode }
 
-function fileToDataURL(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(file)
-  })
-}
-
-const ADMIN_TOKEN_KEY = 'generative-ui-playground:admin-token'
-
 export function Chat() {
   const [mode, setMode] = useState<Mode>(DEFAULT_MODE)
   const [model, setModel] = useState<ModelId>(DEFAULT_MODEL)
-  const [adminToken, setAdminToken] = useState<string | null>(() =>
-    typeof window === 'undefined' ? null : localStorage.getItem(ADMIN_TOKEN_KEY)
-  )
-  const isAdmin = !!adminToken
 
   const agent = useAgent<typeof RestaurantAgent>({
     agent: 'RestaurantAgent',
@@ -44,12 +29,7 @@ export function Chat() {
 
   const { messages, sendMessage, status, clearHistory, error } = useAgentChat({ agent })
   const [input, setInput] = useState('')
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
-  const [isRegistering, setIsRegistering] = useState(false)
-  const [dropZoneActive, setDropZoneActive] = useState(false)
   const [historyIndex, setHistoryIndex] = useState(-1)
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
   const userHistory = useMemo(() => {
@@ -67,44 +47,11 @@ export function Chat() {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [messages])
 
-  useEffect(() => {
-    if (!imageFile) {
-      setImagePreview(null)
-      return
-    }
-    const url = URL.createObjectURL(imageFile)
-    setImagePreview(url)
-    return () => URL.revokeObjectURL(url)
-  }, [imageFile])
+  const isBusy = status === 'streaming' || status === 'submitted'
 
-  const isBusy = status === 'streaming' || status === 'submitted' || isRegistering
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (isBusy) return
-
-    if (imageFile) {
-      if (!isAdmin) return
-      setIsRegistering(true)
-      try {
-        const dataUrl = await fileToDataURL(imageFile)
-        await agent.stub.registerRestaurant({
-          text: input,
-          imageDataUrl: dataUrl,
-          imageMime: imageFile.type,
-          adminToken: adminToken ?? undefined,
-        })
-        setInput('')
-        setImageFile(null)
-      } catch (err) {
-        console.error('registerRestaurant failed', err)
-      } finally {
-        setIsRegistering(false)
-      }
-      return
-    }
-
-    if (!input.trim()) return
+    if (isBusy || !input.trim()) return
     sendMessage({ text: input })
     setInput('')
     setHistoryIndex(-1)
@@ -139,49 +86,10 @@ export function Chat() {
     setAgentState({ model, mode: m })
   }
 
-  const handleFile = (file: File | null) => {
-    if (!file) return
-    if (!file.type.startsWith('image/')) return
-    if (!isAdmin) return
-    setImageFile(file)
-  }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    setDropZoneActive(false)
-    if (!isAdmin) return
-    const file = e.dataTransfer.files?.[0]
-    handleFile(file ?? null)
-  }
-
-  const handleAdminToggle = () => {
-    if (isAdmin) {
-      localStorage.removeItem(ADMIN_TOKEN_KEY)
-      setAdminToken(null)
-      return
-    }
-    const t = window.prompt('Admin token を入力してください')
-    if (!t) return
-    localStorage.setItem(ADMIN_TOKEN_KEY, t)
-    setAdminToken(t)
-  }
-
-  const statusText = isRegistering ? 'registering' : !error && status === 'error' ? 'ready' : status
+  const statusText = !error && status === 'error' ? 'ready' : status
 
   return (
-    <div
-      className='chat'
-      data-drop-active={dropZoneActive}
-      onDragOver={(e) => {
-        e.preventDefault()
-        if (e.dataTransfer.types.includes('Files')) setDropZoneActive(true)
-      }}
-      onDragLeave={(e) => {
-        if (e.currentTarget.contains(e.relatedTarget as Node)) return
-        setDropZoneActive(false)
-      }}
-      onDrop={handleDrop}
-    >
+    <div className='chat'>
       <header className='chat__header'>
         <span className='chat__title'>レストラン提案</span>
         <ModeSelector value={mode} onChange={handleModeChange} />
@@ -194,15 +102,6 @@ export function Chat() {
             title='会話履歴をクリア'
           >
             Clear
-          </button>
-          <button
-            type='button'
-            className='chat__admin'
-            data-active={isAdmin}
-            onClick={handleAdminToggle}
-            title={isAdmin ? '管理モード ON (クリックで解除)' : '管理モードに切替'}
-          >
-            {isAdmin ? '🔓 Admin' : '🔒'}
           </button>
           <span className='chat__status' data-status={statusText}>
             {statusText}
@@ -235,7 +134,6 @@ export function Chat() {
                 </button>
               ))}
             </div>
-            <small>📷 画像をドロップしてお店を登録することもできます (Admin のみ)</small>
           </div>
         )}
         {messages.map((m) => (
@@ -252,53 +150,15 @@ export function Chat() {
               <span />
             </span>
             <span className='thinking-indicator__label'>
-              {isRegistering
-                ? 'レストランを登録中…'
-                : status === 'submitted'
-                  ? 'リクエスト送信済、応答待ち…'
-                  : 'AI が考え中…'}
+              {status === 'submitted' ? 'リクエスト送信済、応答待ち…' : 'AI が考え中…'}
             </span>
           </div>
         )}
-        {dropZoneActive && <div className='drop-overlay'>📷 ここにドロップしてお店を登録</div>}
         <div ref={endRef} />
       </div>
 
       <form className='chat__form' onSubmit={handleSubmit}>
-        {imagePreview && (
-          <div className='image-preview'>
-            <img src={imagePreview} alt='登録予定' />
-            <button
-              type='button'
-              className='image-preview__remove'
-              onClick={() => setImageFile(null)}
-              aria-label='画像を削除'
-            >
-              ×
-            </button>
-            <span className='image-preview__hint'>写真と一言でお店を登録します</span>
-          </div>
-        )}
         <div className='chat__input-row'>
-          {isAdmin && (
-            <>
-              <button
-                type='button'
-                className='chat__attach'
-                onClick={() => fileInputRef.current?.click()}
-                title='画像を添付 (admin)'
-              >
-                📷
-              </button>
-              <input
-                ref={fileInputRef}
-                type='file'
-                accept='image/*'
-                style={{ display: 'none' }}
-                onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
-              />
-            </>
-          )}
           <input
             type='text'
             name='chat-input'
@@ -309,20 +169,14 @@ export function Chat() {
               if (historyIndex !== -1) setHistoryIndex(-1)
             }}
             onKeyDown={handleKeyDown}
-            placeholder={
-              imageFile ? '一言コメント (例: 関内のラーメン屋)' : '気分を入力 / 画像をドロップ'
-            }
+            placeholder='気分や条件を入力'
             autoFocus
             autoComplete='off'
             autoCorrect='off'
             spellCheck={false}
           />
-          <button
-            type='submit'
-            className='chat__send'
-            disabled={isBusy || (!input.trim() && !imageFile)}
-          >
-            {isBusy ? '応答中…' : imageFile ? '登録' : '送信'}
+          <button type='submit' className='chat__send' disabled={isBusy || !input.trim()}>
+            {isBusy ? '応答中…' : '送信'}
           </button>
         </div>
       </form>

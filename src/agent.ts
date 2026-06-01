@@ -1,14 +1,8 @@
 import { AIChatAgent } from '@cloudflare/ai-chat'
-import { callable } from 'agents'
-import { convertToModelMessages, stepCountIs, streamText, type ToolSet, type UIMessage } from 'ai'
+import { convertToModelMessages, stepCountIs, streamText, type ToolSet } from 'ai'
 import { createWorkersAI } from 'workers-ai-provider'
 import { DEFAULT_MODE, type Mode } from './modes'
 import { DEFAULT_MODEL, type ModelId } from './models'
-import {
-  addRestaurant,
-  type AddRestaurantInput,
-  type AddRestaurantResult,
-} from './tools/add-restaurant'
 import { makeDynamicRenderTool } from './tools/dynamic-render'
 import { renderHTMLTool, renderUITool } from './tools/render-ui'
 import { makeSearchRestaurantsTool } from './tools/search-restaurants'
@@ -135,48 +129,5 @@ export class RestaurantAgent extends AIChatAgent<CloudflareBindings, AgentState>
       onFinish,
     })
     return result.toUIMessageStreamResponse()
-  }
-
-  @callable()
-  async registerRestaurant(input: AddRestaurantInput): Promise<AddRestaurantResult> {
-    const expected = this.env.ADMIN_TOKEN
-    if (expected && input.adminToken !== expected) {
-      throw new Error('Unauthorized: invalid admin token')
-    }
-    const result = await addRestaurant(this.env, input)
-
-    const now = Date.now()
-    const userMessage: UIMessage = {
-      id: `user-${now}`,
-      role: 'user',
-      parts: [
-        { type: 'text', text: input.text || '(写真のみ)' },
-        ...(input.imageDataUrl
-          ? [
-              {
-                type: 'file' as const,
-                mediaType: input.imageMime ?? 'image/jpeg',
-                url: input.imageDataUrl,
-              },
-            ]
-          : []),
-      ],
-    }
-
-    const assistantMessage: UIMessage = {
-      id: `assistant-${now + 1}`,
-      role: 'assistant',
-      parts: [
-        {
-          type: 'text',
-          text: `✅ 保存しました: **${result.restaurant.name}** (${result.restaurant.area} / ${result.restaurant.genre})${
-            result.visionSummary ? `\n📷 ${result.visionSummary}` : ''
-          }\n\n次の検索結果に含まれるようになりました。`,
-        },
-      ],
-    }
-
-    await this.saveMessages((messages) => [...messages, userMessage, assistantMessage])
-    return result
   }
 }
