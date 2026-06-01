@@ -23,6 +23,7 @@ type Weather = {
 type LastTrain = { station: string; summary: string; leaveBy: string } | null
 type Turn = { role: 'user' | 'assistant'; text: string }
 
+type Metric = { ms: number; tokens: number; chars: number }
 type BandResults = {
   controlled: Plan | null
   declarative: DeclarativeUI | null
@@ -30,6 +31,7 @@ type BandResults = {
   dynamicFrameUrl: string | null
   dynamicCode: string
   status: Record<Band, Status>
+  metrics: Partial<Record<Band, Metric>>
 }
 
 const EMPTY_RESULTS: BandResults = {
@@ -39,6 +41,7 @@ const EMPTY_RESULTS: BandResults = {
   dynamicFrameUrl: null,
   dynamicCode: '',
   status: { controlled: 'idle', declarative: 'idle', 'open-ended': 'idle', dynamic: 'idle' },
+  metrics: {},
 }
 
 const BANDS: { id: Band; label: string; desc: string }[] = [
@@ -70,11 +73,12 @@ export function Compare() {
   const historyRef = useRef<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
   const compareRef = useRef<HTMLDivElement>(null)
+  const chatLogRef = useRef<HTMLDivElement>(null)
 
   const ready = !!params
   const isStreaming = intaking || Object.values(results.status).some((s) => s === 'streaming')
 
-  // ストリーミング中はコンテンツの伸びを追って下へオートスクロール (伸びる iframe にも追従)
+  // プラン側: バンドのストリーミング中はコンテンツの伸びを追って下へ (伸びる iframe にも追従)
   useEffect(() => {
     if (!isStreaming) return
     const el = compareRef.current
@@ -84,6 +88,12 @@ export function Compare() {
     }, 150)
     return () => clearInterval(id)
   }, [isStreaming])
+
+  // チャット側: 会話が増えたら最下部へ
+  useEffect(() => {
+    const el = chatLogRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [convo, intaking])
 
   const submit = async (text: string) => {
     const t = text.trim()
@@ -202,6 +212,12 @@ export function Compare() {
         case 'dynamic':
           if (ev.error) s.status = { ...s.status, dynamic: 'error' }
           break
+        case 'metrics':
+          s.metrics = {
+            ...s.metrics,
+            [b]: { ms: ev.ms as number, tokens: ev.tokens as number, chars: ev.chars as number },
+          }
+          break
       }
       void b
       return s
@@ -244,9 +260,11 @@ export function Compare() {
     }
   }
 
+  const activeMetric = results.metrics[band]
+
   return (
-    <div className='chat'>
-      <header className='chat__header'>
+    <div className='advisor'>
+      <header className='advisor__header'>
         <span className='chat__title'>飲み会アドバイザー 🍻</span>
         <div className='chat__header-right'>
           <ModelSelector value={model} onChange={setModel} />
@@ -259,117 +277,143 @@ export function Compare() {
         </div>
       </header>
 
-      <div className='compare' ref={compareRef}>
-        {convo.length === 0 && (
-          <div className='compare__empty'>
-            <div className='compare__empty-icon'>🌃</div>
-            <p>横浜の夜のプランを作ります。日付・エリア・人数・用途を一言で。</p>
-            <div className='compare__samples'>
-              {SAMPLES.map((q) => (
-                <Button
-                  key={q}
-                  type='button'
-                  variant='outline'
-                  size='sm'
-                  onClick={() => submit(q)}
-                >
-                  {q}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* intake の会話 (聞き返し) */}
-        {convo.map((t, i) => (
-          <div key={i} className='message' data-role={t.role === 'user' ? 'user' : 'assistant'}>
-            <div className='message__role'>{t.role === 'user' ? 'あなた' : 'AI'}</div>
-            <div className='message__body'>{t.text}</div>
-          </div>
-        ))}
-        {intaking && (
-          <div className='thinking-indicator'>
-            <span className='thinking-indicator__dots'>
-              <span />
-              <span />
-              <span />
-            </span>
-            <span className='thinking-indicator__label'>条件を整理中…</span>
-          </div>
-        )}
-
-        {error && <div className='tool-error'>{error}</div>}
-
-        {ready && params && (
-          <>
-            <div className='plan-head'>
-              <div className='plan-cond'>
-                <span className='plan-cond__chip'>📅 {params.dateLabel}</span>
-                <span className='plan-cond__chip'>📍 {params.area}</span>
-                <span className='plan-cond__chip'>👥 {params.partySize}人</span>
-                <span className='plan-cond__chip'>🎯 {params.purpose}</span>
-                {weather && (
-                  <span className='plan-cond__chip'>
-                    {weather.emoji} {weather.label} {weather.tempMax ?? '?'}℃ / 降水
-                    {weather.precipProb ?? '?'}%
-                  </span>
-                )}
-                {lastTrain && (
-                  <span className='plan-cond__chip' title={`${lastTrain.station}: ${lastTrain.summary}`}>
-                    🚃 終電 {lastTrain.leaveBy}に出る
-                  </span>
-                )}
+      <div className='advisor__body'>
+        {/* 左: チャット (条件のやりとり) */}
+        <aside className='advisor__chat'>
+          <div className='advisor__log' ref={chatLogRef}>
+            {convo.length === 0 && (
+              <div className='advisor__intro'>
+                <div className='compare__empty-icon'>🌃</div>
+                <p>横浜の夜のプランを作ります。日付・エリア・人数・用途を一言で。</p>
+                <div className='compare__samples'>
+                  {SAMPLES.map((q) => (
+                    <Button
+                      key={q}
+                      type='button'
+                      variant='outline'
+                      size='sm'
+                      onClick={() => submit(q)}
+                    >
+                      {q}
+                    </Button>
+                  ))}
+                </div>
               </div>
+            )}
 
-              <div className='seg seg--bands' role='tablist'>
-                {BANDS.map((b) => (
-                  <button
-                    key={b.id}
-                    type='button'
-                    role='tab'
-                    className='seg__item'
-                    data-active={band === b.id}
-                    onClick={() => switchBand(b.id)}
-                  >
-                    {b.label}
-                    {results.status[b.id] === 'streaming' && <span className='seg__dot' />}
-                  </button>
-                ))}
+            {convo.map((t, i) => (
+              <div key={i} className='message' data-role={t.role === 'user' ? 'user' : 'assistant'}>
+                <div className='message__role'>{t.role === 'user' ? 'あなた' : 'AI'}</div>
+                <div className='message__body'>{t.text}</div>
               </div>
-            </div>
-            <p className='band-tabs__desc'>{BANDS.find((b) => b.id === band)?.desc}</p>
+            ))}
+            {intaking && (
+              <div className='thinking-indicator'>
+                <span className='thinking-indicator__dots'>
+                  <span />
+                  <span />
+                  <span />
+                </span>
+                <span className='thinking-indicator__label'>条件を整理中…</span>
+              </div>
+            )}
+            {error && <div className='tool-error'>{error}</div>}
+          </div>
 
-            <BandPanel band={band} results={results} restaurants={restaurants} />
-          </>
-        )}
-      </div>
-
-      <form
-        className='chat__form'
-        onSubmit={(e) => {
-          e.preventDefault()
-          submit(input)
-        }}
-      >
-        <div className='chat__input-row'>
-          <input
-            type='text'
-            className='chat__input'
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value)
-              if (historyIndex !== -1) setHistoryIndex(-1)
+          <form
+            className='chat__form'
+            onSubmit={(e) => {
+              e.preventDefault()
+              submit(input)
             }}
-            onKeyDown={handleKeyDown}
-            placeholder='例: 来週の金曜、関内で4人で接待'
-            autoComplete='off'
-            autoFocus
-          />
-          <Button type='submit' variant='primary' loading={intaking} disabled={!input.trim()}>
-            送信
-          </Button>
-        </div>
-      </form>
+          >
+            <div className='chat__input-row'>
+              <input
+                type='text'
+                className='chat__input'
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value)
+                  if (historyIndex !== -1) setHistoryIndex(-1)
+                }}
+                onKeyDown={handleKeyDown}
+                placeholder='例: 来週の金曜、関内で4人で接待'
+                autoComplete='off'
+                autoFocus
+              />
+              <Button type='submit' variant='primary' loading={intaking} disabled={!input.trim()}>
+                送信
+              </Button>
+            </div>
+          </form>
+        </aside>
+
+        {/* 右: プラン (主役) */}
+        <main className='advisor__plan' ref={compareRef}>
+          {!(ready && params) ? (
+            <div className='advisor__plan-empty'>
+              <div className='compare__empty-icon'>🍻</div>
+              <p>左のチャットで条件を伝えると、ここに同じプランを 4 パターンで描き分けます。</p>
+            </div>
+          ) : (
+            <>
+              <div className='plan-head'>
+                <div className='plan-cond'>
+                  <span className='plan-cond__chip'>📅 {params.dateLabel}</span>
+                  <span className='plan-cond__chip'>📍 {params.area}</span>
+                  <span className='plan-cond__chip'>👥 {params.partySize}人</span>
+                  <span className='plan-cond__chip'>🎯 {params.purpose}</span>
+                  {weather && (
+                    <span className='plan-cond__chip'>
+                      {weather.emoji} {weather.label} {weather.tempMax ?? '?'}℃ / 降水
+                      {weather.precipProb ?? '?'}%
+                    </span>
+                  )}
+                  {lastTrain && (
+                    <span
+                      className='plan-cond__chip'
+                      title={`${lastTrain.station}: ${lastTrain.summary}`}
+                    >
+                      🚃 終電 {lastTrain.leaveBy}に出る
+                    </span>
+                  )}
+                </div>
+
+                <div className='seg seg--bands' role='tablist'>
+                  {BANDS.map((b) => (
+                    <button
+                      key={b.id}
+                      type='button'
+                      role='tab'
+                      className='seg__item'
+                      data-active={band === b.id}
+                      onClick={() => switchBand(b.id)}
+                    >
+                      {b.label}
+                      {results.status[b.id] === 'streaming' && <span className='seg__dot' />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className='band-tabs__meta'>
+                <p className='band-tabs__desc'>{BANDS.find((b) => b.id === band)?.desc}</p>
+                {activeMetric && (
+                  <span
+                    className='band-metric'
+                    title='このバンドの生成にかかった時間 / 出力トークン / 出力文字数'
+                  >
+                    ⏱ {(activeMetric.ms / 1000).toFixed(1)}s · 🔢 {activeMetric.tokens} tok · 📝{' '}
+                    {activeMetric.chars.toLocaleString()} chars
+                  </span>
+                )}
+              </div>
+
+              <BandPanel band={band} results={results} restaurants={restaurants} />
+            </>
+          )}
+        </main>
+      </div>
     </div>
   )
 }

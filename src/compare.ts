@@ -8,7 +8,7 @@
  *   Open-Ended  — HTML でプラン1枚
  *   Dynamic     — React コードでプラン → /api/dynamic-frame で Suspense SSR
  */
-import { generateObject, streamObject, streamText } from 'ai'
+import { generateObject, streamObject, streamText, type LanguageModelUsage } from 'ai'
 import { resolveModel } from './llm'
 import type { ModelId } from './models'
 import { DeclarativeUISchema } from './schemas/declarative'
@@ -170,10 +170,19 @@ export function streamBand(
         ? undefined
         : { 'workers-ai': { max_tokens: 4096, reasoning_effort: 'low' as const } }
       const ctx = planContext(params, weather, restaurants, lastTrain)
+      const started = Date.now()
+      // 生成コストの計測 (Dynamic は map でループ＝出力が小さく最速、を見せる)
+      const metric = (usage: LanguageModelUsage | undefined, output: string) =>
+        send({
+          type: 'metrics',
+          ms: Date.now() - started,
+          tokens: usage?.outputTokens ?? usage?.totalTokens ?? 0,
+          chars: output.length,
+        })
 
       try {
         if (band === 'controlled') {
-          const { object } = await generateObject({
+          const { object, usage } = await generateObject({
             model,
             schema: PlanSchema,
             providerOptions,
@@ -184,8 +193,9 @@ ${COMMON}
 ${ctx}`,
           })
           send({ type: 'controlled', plan: object })
+          metric(usage, JSON.stringify(object))
         } else if (band === 'declarative') {
-          const { partialObjectStream, object } = streamObject({
+          const { partialObjectStream, object, usage } = streamObject({
             model,
             schema: DeclarativeUISchema,
             providerOptions,
@@ -201,9 +211,11 @@ ${ctx}`,
           for await (const partial of partialObjectStream) {
             send({ type: 'declarative-partial', ui: partial })
           }
-          send({ type: 'declarative', ui: await object })
+          const finalUi = await object
+          send({ type: 'declarative', ui: finalUi })
+          metric(await usage, JSON.stringify(finalUi))
         } else if (band === 'open-ended') {
-          const { textStream, text } = streamText({
+          const { textStream, text, usage } = streamText({
             model,
             providerOptions,
             prompt: `あなたは Open-Ended アシスタントです。夜のプランを **完全な単一 HTML 文書**
@@ -214,7 +226,9 @@ ${COMMON}
 ${ctx}`,
           })
           for await (const delta of textStream) send({ type: 'open-ended-delta', delta })
-          send({ type: 'open-ended', html: extractHTML(await text) })
+          const html = extractHTML(await text)
+          send({ type: 'open-ended', html })
+          metric(await usage, html)
         } else {
           // Dynamic は restaurants(居酒屋) と ramens(〆) を別 prop で受け取る
           const izakaya = restaurants.filter((r) => r.genre !== '家系ラーメン')
@@ -224,7 +238,7 @@ ${ctx}`,
 終電: ${lastTrain.station} … ${lastTrain.summary} (お店を出る目安 ${lastTrain.leaveBy})
 restaurants(居酒屋・手元データ): ${dataForPrompt(izakaya)}
 ramens(〆ラーメン候補・id と name のみ。詳細は useRamenShop で取る): ${JSON.stringify(ramens.map((r) => ({ id: r.id, name: r.name })))}`
-          const { textStream, text } = streamText({
+          const { textStream, text, usage } = streamText({
             model,
             providerOptions,
             prompt: `あなたは Dynamic バンドのアシスタントです。夜のプランを表示する React
@@ -264,6 +278,7 @@ ${dynCtx}`,
           const q = [params.purpose, params.mood].filter(Boolean).join(' ')
           const url = `/api/dynamic-frame?area=${encodeURIComponent(params.area)}&q=${encodeURIComponent(q)}&code=${b64urlEncode(code)}`
           send({ type: 'dynamic-frame', url, code })
+          metric(await usage, code)
           send({ type: 'dynamic', code })
         }
       } catch (e) {
