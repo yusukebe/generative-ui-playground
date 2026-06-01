@@ -524,7 +524,7 @@ export function Compare() {
                       className='band-metric band-metric--ttfr'
                       title='初描画: 生成開始(ツール収集を含む)から最初の可視コンテンツが出るまで'
                     >
-                      ⚡ 初描画 {((results.ttfr[band] as number) / 1000).toFixed(1)}s
+                      初描画 {((results.ttfr[band] as number) / 1000).toFixed(1)}s
                     </span>
                   )}
                   {activeMetric && (
@@ -532,8 +532,8 @@ export function Compare() {
                       className='band-metric'
                       title='プラン作成の合計コスト = データ収集(ツール) + このバンドの生成。時間 / トークン / 生成文字数'
                     >
-                      プラン作成 ⏱ {(activeMetric.ms / 1000).toFixed(1)}s · 🔢 {activeMetric.tokens} tok
-                      · 📝 {activeMetric.chars.toLocaleString()} chars
+                      プラン作成 {(activeMetric.ms / 1000).toFixed(1)}s · {activeMetric.tokens}tok ·{' '}
+                      {activeMetric.chars.toLocaleString()}字
                     </span>
                   )}
                 </span>
@@ -584,7 +584,7 @@ function BandPanel({
       <Streaming label='プランを組み立て中…' />
     )
     script = results.controlled ? JSON.stringify(results.controlled, null, 2) : ''
-    scriptLabel = '🧠 AI が埋めたプラン (JSON)'
+    scriptLabel = 'AI が埋めたのは title と steps だけ (天気/終電/店は固定コンポーネント+データ)'
   } else if (band === 'declarative') {
     preview = results.declarative ? (
       <DeclarativeView

@@ -1079,18 +1079,11 @@ body,
   line-height: 1.7;
 }
 
-/* エージェントのツール実行 (データ収集) の可視化 */
+/* エージェントのツール実行 (データ収集) の可視化 — 枠を消して軽く */
 .tool-activity {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
-}
-.tool-activity[data-running='true'] {
-  border-color: var(--accent);
 }
 .tool-activity__head {
   display: flex;
@@ -1101,7 +1094,6 @@ body,
 }
 .tool-activity__title {
   font-size: 12px;
-  font-weight: 600;
   color: var(--text-muted);
 }
 .tool-activity__list {
@@ -1111,10 +1103,10 @@ body,
 }
 .tool-activity__chip {
   font-size: 11px;
-  padding: 4px 10px;
+  padding: 3px 9px;
   border-radius: 999px;
   background: var(--surface-2);
-  border: 1px solid var(--border);
+  color: var(--text-muted);
   white-space: nowrap;
 }
 .tool-activity__chip--pending {
@@ -1155,29 +1147,26 @@ body,
   font-size: 11px;
   color: var(--text-muted);
   background: var(--surface-2);
-  border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 4px 10px;
+  padding: 3px 9px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 .band-metric--ttfr {
   color: #2563eb;
   background: rgba(37, 99, 235, 0.08);
-  border-color: rgba(37, 99, 235, 0.2);
 }
 .band-reload {
   margin-left: 8px;
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border: none;
+  background: var(--surface-2);
   color: var(--text-muted);
   cursor: pointer;
 }
 .band-reload:hover:not(:disabled) {
-  background: var(--surface-2);
   color: var(--text);
 }
 .band-reload:disabled {
@@ -1453,16 +1442,15 @@ body,
 }
 .band-panel__script {
   min-width: 0;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 10px 12px;
 }
 .band-panel__script > summary {
   cursor: pointer;
   font-size: 12px;
-  color: var(--accent);
-  font-weight: 600;
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+.band-panel__script > summary:hover {
+  color: var(--text);
 }
 .band-panel__script pre {
   margin: 0;
@@ -1481,27 +1469,25 @@ body,
 /* 条件＋バンドタブ (固定はしない・プランと一緒にスクロール) */
 .plan-head {
   background: var(--bg);
-  padding: 6px 0 10px;
+  padding: 2px 0 4px;
   margin: 0 -2px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  border-bottom: 1px solid var(--border);
+  gap: 12px;
 }
 
-/* プラン条件チップ */
+/* プラン条件チップ — 枠なし・控えめ */
 .plan-cond {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 .plan-cond__chip {
   font-size: 12px;
-  padding: 5px 10px;
+  padding: 4px 10px;
   border-radius: 999px;
   background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--text);
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
