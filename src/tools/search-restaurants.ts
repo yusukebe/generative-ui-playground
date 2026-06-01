@@ -1,6 +1,11 @@
 import { tool } from 'ai'
 import { z } from 'zod'
-import { rowToRestaurant, type DbRestaurantRow, type Restaurant } from '../types'
+import {
+  decodeUnicodeEscapes,
+  rowToRestaurant,
+  type DbRestaurantRow,
+  type Restaurant,
+} from '../types'
 
 export const SearchInputSchema = z.object({
   query: z.string().optional().describe('自由文クエリ。曖昧な気分の表現も可'),
@@ -19,23 +24,29 @@ export async function searchRestaurants(db: D1Database, input: SearchInput): Pro
   const conditions: string[] = []
   const params: unknown[] = []
 
-  if (input.area) {
+  // LLM が日本語を \uXXXX エスケープのまま渡してくることがあるのでデコード
+  const area = input.area ? decodeUnicodeEscapes(input.area) : undefined
+  const genre = input.genre ? decodeUnicodeEscapes(input.genre) : undefined
+  const atmosphere = input.atmosphere ? decodeUnicodeEscapes(input.atmosphere) : undefined
+  const query = input.query ? decodeUnicodeEscapes(input.query) : undefined
+
+  if (area) {
     conditions.push('area LIKE ?')
-    params.push(`%${input.area}%`)
+    params.push(`%${area}%`)
   }
-  if (input.genre) {
+  if (genre) {
     conditions.push('genre LIKE ?')
-    params.push(`%${input.genre}%`)
+    params.push(`%${genre}%`)
   }
-  if (input.atmosphere) {
+  if (atmosphere) {
     conditions.push('atmosphere LIKE ?')
-    params.push(`%${input.atmosphere}%`)
+    params.push(`%${atmosphere}%`)
   }
   // query は他の絞り込み条件が無いときだけ使う (LLM が area/genre/atmosphere
   // と一緒に query=ユーザ発話全体 を渡してくると AND 結合で 0 件になるため)
-  if (input.query && !input.area && !input.genre && !input.atmosphere) {
+  if (query && !area && !genre && !atmosphere) {
     conditions.push('(name LIKE ? OR note LIKE ? OR tags LIKE ? OR vision_summary LIKE ?)')
-    const q = `%${input.query}%`
+    const q = `%${query}%`
     params.push(q, q, q, q)
   }
 

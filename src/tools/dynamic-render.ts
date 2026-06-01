@@ -108,6 +108,11 @@ export function makeDynamicRenderTool(env: CloudflareBindings) {
   - \`react-dom/server.edge\` (renderToString) — **必ず \`server.edge\` を使うこと**。\`react-dom/server\` (拡張子なし) は node 版で Worker runtime では動きません
   - \`./restaurant-ui\` (事前定義の RestaurantCard / RestaurantList)
 
+# 日本語に関する重要な注意
+- 見出し (<h1> 等) や本文の日本語は、ユーザの発話や検索条件をそのまま使ってください。勝手に言い換えたり創作したりしないこと
+- 日本語を \\u3042 のような Unicode エスケープで書かず、そのまま日本語の文字で書くこと
+- 店舗情報 (店名・住所など) はコードに直接書かず、必ず restaurants 配列の値を使うこと
+
 # restaurant-ui の型
 ${RESTAURANT_UI_DTS}
 
