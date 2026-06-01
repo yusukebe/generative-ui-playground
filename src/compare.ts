@@ -355,8 +355,8 @@ export function streamBand(
             schema: PlanSchema,
             providerOptions,
             prompt: `あなたは既製の「プラン」テンプレに値を流し込む Controlled アシスタントです。
-はしご (2〜3軒) のプランを組み、weatherNote / steps[{label,restaurantId,why}] / tip を埋めてください。
-label は「1軒目」「2軒目」「〆」など。restaurantId は候補の id。
+title と steps[{label,restaurantId,why}] だけ埋めてください (天気/終電は別コンポーネントが出すので不要)。
+提供された全店を使い、label は「1軒目」「2軒目」「〆」。restaurantId は候補の id。why は一言(天気もふまえて)。
 ${COMMON}
 ${ctx}`,
           })

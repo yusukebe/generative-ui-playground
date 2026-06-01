@@ -30,20 +30,20 @@ export const IntakeSchema = z.object({
 
 export type IntakeResult = z.infer<typeof IntakeSchema>
 
-// Controlled バンド: 既製の「プラン」テンプレートに AI が値を流し込む
+// Controlled バンド: 既製の「プラン」テンプレートに AI が値を流し込む。
+// 天気/終電は WeatherBanner/LastTrainCard(共有コンポーネント)が描くので、ここでは
+// タイトルと各ステップ(店選びと理由)だけ AI に埋めさせる。
 export const PlanSchema = z.object({
-  title: z.string().describe('プランのタイトル'),
-  weatherNote: z.string().describe('天気をふまえた一言 (例: 雨予報なので屋内中心に)'),
+  title: z.string().describe('プランのタイトル (天気/エリア/用途をふまえて)'),
   steps: z
     .array(
       z.object({
         label: z.string().describe('1軒目 / 2軒目 / 〆 など'),
         restaurantId: z.string().describe('restaurants の id'),
-        why: z.string().describe('その店を選んだ理由 (一言)'),
+        why: z.string().describe('その店を選んだ理由 (一言・天気もふまえて)'),
       })
     )
     .describe('時系列のプラン (店をはしご)'),
-  tip: z.string().nullable().describe('予約・移動などのメモ'),
 })
 
 export type Plan = z.infer<typeof PlanSchema>

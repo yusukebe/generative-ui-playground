@@ -31,7 +31,6 @@ export function PlanView({
     <div className='plan'>
       {plan.title && <h3 className='plan__title'>{plan.title}</h3>}
       <WeatherBanner weather={weather} />
-      {plan.weatherNote && <div className='plan__weather'>☔️ {plan.weatherNote}</div>}
       <LastTrainCard lastTrain={lastTrain} />
       <ol className='plan__steps plan__steps--grid'>
         {plan.steps.map((s, i) => {
@@ -49,7 +48,6 @@ export function PlanView({
           )
         })}
       </ol>
-      {plan.tip && <div className='plan__tip'>📝 {plan.tip}</div>}
     </div>
   )
 }
