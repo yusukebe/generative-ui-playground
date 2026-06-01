@@ -100,7 +100,7 @@ Dynamic は Open-Ended の延長線上だが、LLM が**コードを書く** こ
 
 - インラインスタイル only (CSS クラスは iframe には届かないため)
 - `react` のみ依存、self-contained TSX
-- vite の `?raw` import でソース文字列を取得 → worker-bundler で TSX → JS にバンドル → DynamicWorkerExecutor の modules に `'restaurant-ui'` として inject
+- vite の `?raw` import でソース文字列を取得 → worker-bundler に `files['src/restaurant-ui.tsx']` として渡し、LLM の Worker module から `'./restaurant-ui'` で相対 import 可能に
 - LLM の prompt には `.d.ts` 相当の型情報を埋め込む
 
 ## サブテーマ: 「フォーム UI は消える」
@@ -126,7 +126,7 @@ Dynamic は Open-Ended の延長線上だが、LLM が**コードを書く** こ
 | 判断                                                    | 理由                                                                                                                                                                                                                                     |
 | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Cloudflare 完結** (Vercel/Next.js を使わない)         | 登壇者が Hono 作者。Cloudflare 主軸でデモを組みたい                                                                                                                                                                                      |
-| **Code Mode + React を全モードで使う**                  | LLM が同じ仕組みで Spectrum を歩けるようにするため                                                                                                                                                                                       |
+| **Dynamic だけ "コードを書く" 仕様、他は素朴な tool**   | Spectrum を「素朴 → 動的」の階段として見せるため。Controlled/Declarative/Open-Ended は echo back ツールで素朴に、Dynamic だけ worker-bundler + LOADER で「LLM が SSR Worker module を書く」                                              |
 | **4 バンドを ModeSelector で切替可能に**                | 登壇演出「実は 4 つ目を考えました」のため。Dynamic を第 4 のバンドとして他 3 つと並べて見せる                                                                                                                                            |
 | **Content-Type で UI 描画を分岐**                       | 擬似 Response `{ contentType, body }` の Content-Type を見て RestaurantList / DeclarativeView / iframe を切り替え                                                                                                                        |
 | **共有コンポーネントを worker-bundler で bundle 同梱**  | LLM が JSX で `<RestaurantList />` を借りられる = Spectrum の「Controlled 端」を表現できる。`src/ui-components.tsx` を `'./restaurant-ui'` で相対 import 可能に                                                                          |

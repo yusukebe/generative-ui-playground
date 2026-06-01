@@ -6,12 +6,12 @@ CopilotKit が提唱する [**Generative UI Spectrum**](https://www.copilotkit.a
 
 ## 4 つのバンド
 
-| バンド          | LLM 出力                                      | 描画                                                                |
-| --------------- | --------------------------------------------- | ------------------------------------------------------------------- |
-| **Controlled**  | tool call `search_restaurants`                | 事前定義 React コンポーネント (`RestaurantList`) で dispatch        |
-| **Declarative** | tool call `render_ui` (JSON UI ツリー)        | プリミティブ語彙 (Section / Card) を再帰描画                        |
-| **Open-Ended**  | tool call `render_html` (HTML 文字列)         | `<iframe sandbox>` + CSP で実行                                     |
-| **Dynamic** ✨  | tool call `codemode` (**JSX で動的にコード**) | **Cloudflare Dynamic Worker で SSR**、`<RestaurantList />` も借用可 |
+| バンド          | LLM 出力                                            | 描画                                                                |
+| --------------- | --------------------------------------------------- | ------------------------------------------------------------------- |
+| **Controlled**  | tool call `search_restaurants`                      | 事前定義 React コンポーネント (`RestaurantList`) で dispatch        |
+| **Declarative** | tool call `render_ui` (JSON UI ツリー)              | プリミティブ語彙 (Section / Card) を再帰描画                        |
+| **Open-Ended**  | tool call `render_html` (HTML 文字列)               | `<iframe sandbox>` + CSP で実行                                     |
+| **Dynamic** ✨  | tool call `dynamic_render` (**JSX で動的にコード**) | **Cloudflare Dynamic Worker で SSR**、`<RestaurantList />` も借用可 |
 
 並走サブテーマ: **「フォーム UI は消える」** — レストラン登録は専用フォームではなく、チャット入力 + 写真 DnD で行い、LLM が曖昧な自然言語入力を Workers AI Vision で正規化する。
 
@@ -39,9 +39,7 @@ CopilotKit が提唱する [**Generative UI Spectrum**](https://www.copilotkit.a
 - Cloudflare Workers + [Hono](https://hono.dev/) + [hono-agents](https://www.npmjs.com/package/hono-agents)
 - React 19 + Vite
 - [Cloudflare Agents SDK](https://developers.cloudflare.com/agents/) (Durable Object として Agent を保持)
-- [@cloudflare/codemode](https://www.npmjs.com/package/@cloudflare/codemode) (Dynamic バンドの実行基盤)
-- [@cloudflare/worker-bundler](https://www.npmjs.com/package/@cloudflare/worker-bundler) (React + 共有コンポーネントを runtime でバンドル)
-- [sucrase](https://www.npmjs.com/package/sucrase) (LLM 生成コードの JSX → React.createElement トランスパイル)
+- [@cloudflare/worker-bundler](https://www.npmjs.com/package/@cloudflare/worker-bundler) + [Worker Loader](https://developers.cloudflare.com/workers/runtime-apis/bindings/worker-loader/) (Dynamic バンドで LLM の Worker module を runtime バンドル → spawn → fetch)
 - Workers AI (Kimi K2.6 / Llama 4 Scout / Llama 3.3 70B / Llama 3.1 8B / Gemma 3 / Qwen 2.5 Coder)
 - D1 (レストラン) + R2 (写真)
 
