@@ -123,20 +123,21 @@ Dynamic は Open-Ended の延長線上だが、LLM が**コードを書く** こ
 
 ## 重要な設計判断と背景
 
-| 判断                                                    | 理由                                                                                                                                                                      |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Cloudflare 完結** (Vercel/Next.js を使わない)         | 登壇者が Hono 作者。Cloudflare 主軸でデモを組みたい                                                                                                                       |
-| **Code Mode + React を全モードで使う**                  | LLM が同じ仕組みで Spectrum を歩けるようにするため                                                                                                                        |
-| **4 バンドを ModeSelector で切替可能に**                | 登壇演出「実は 4 つ目を考えました」のため。Dynamic を第 4 のバンドとして他 3 つと並べて見せる                                                                             |
-| **Content-Type で UI 描画を分岐**                       | 擬似 Response `{ contentType, body }` の Content-Type を見て RestaurantList / DeclarativeView / iframe を切り替え                                                         |
-| **共有コンポーネントを worker-bundler で inject**       | LLM が JSX で `<RestaurantList />` を借りられる = Spectrum の「Controlled 端」を表現できる                                                                                |
-| **sucrase で JSX → React.createElement**                | DynamicWorkerExecutor が arrow function を期待しているため、ESM モジュール bundle 前提の `jsx: 'automatic'` は不可。classic transform で素直に React.createElement を吐く |
-| **データソースは D1 + R2 (モック JSON ではない)**       | ステージでライブ登録するため。Agent state でなく永続層に置けばリハーサル分も残る                                                                                          |
-| **画像は Vision モデルでタグ化**                        | デモ価値が大きい。「LLM が写真を見て『二郎系』と判定」が見せられる                                                                                                        |
-| **Open-Ended は iframe sandbox + CSP**                  | XSS とデータ漏洩を両方ケア。`sandbox="allow-scripts"` で JS は許可、`connect-src 'none'` で外部通信遮断                                                                   |
-| **Admin token は localStorage**                         | デモなのでシンプルに。本番は `wrangler secret put ADMIN_TOKEN` で                                                                                                         |
-| **MCP Apps への接続はデモでは作らない**                 | トーク本編で語る話なので、デモではあえて切り離す                                                                                                                          |
-| **型は `CloudflareBindings` で統一** (`Env` は使わない) | プロジェクトコンベンション                                                                                                                                                |
+| 判断                                                    | 理由                                                                                                                                                                                                                                     |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Cloudflare 完結** (Vercel/Next.js を使わない)         | 登壇者が Hono 作者。Cloudflare 主軸でデモを組みたい                                                                                                                                                                                      |
+| **Code Mode + React を全モードで使う**                  | LLM が同じ仕組みで Spectrum を歩けるようにするため                                                                                                                                                                                       |
+| **4 バンドを ModeSelector で切替可能に**                | 登壇演出「実は 4 つ目を考えました」のため。Dynamic を第 4 のバンドとして他 3 つと並べて見せる                                                                                                                                            |
+| **Content-Type で UI 描画を分岐**                       | 擬似 Response `{ contentType, body }` の Content-Type を見て RestaurantList / DeclarativeView / iframe を切り替え                                                                                                                        |
+| **共有コンポーネントを worker-bundler で bundle 同梱**  | LLM が JSX で `<RestaurantList />` を借りられる = Spectrum の「Controlled 端」を表現できる。`src/ui-components.tsx` を `'./restaurant-ui'` で相対 import 可能に                                                                          |
+| **Dynamic は hono-eval パターン**                       | LLM が**完全な Cloudflare Worker module** を書く → `createWorker` でバンドル → `env.LOADER.get` で spawn → `worker.fetch(request)` で実行。codemode 経由ではなく env.LOADER 直叩きで Response を返すため、ガチの「LLM が書く SSR」になる |
+| **react-dom/server.edge を強制**                        | `react-dom/server` (default) は node 版で `util` を require して Worker runtime で動かない。prompt で `.edge` 付きを必須にしつつ、念のため host 側で string replace でも書き換える二重防御                                               |
+| **データソースは D1 + R2 (モック JSON ではない)**       | ステージでライブ登録するため。Agent state でなく永続層に置けばリハーサル分も残る                                                                                                                                                         |
+| **画像は Vision モデルでタグ化**                        | デモ価値が大きい。「LLM が写真を見て『二郎系』と判定」が見せられる                                                                                                                                                                       |
+| **Open-Ended は iframe sandbox + CSP**                  | XSS とデータ漏洩を両方ケア。`sandbox="allow-scripts"` で JS は許可、`connect-src 'none'` で外部通信遮断                                                                                                                                  |
+| **Admin token は localStorage**                         | デモなのでシンプルに。本番は `wrangler secret put ADMIN_TOKEN` で                                                                                                                                                                        |
+| **MCP Apps への接続はデモでは作らない**                 | トーク本編で語る話なので、デモではあえて切り離す                                                                                                                                                                                         |
+| **型は `CloudflareBindings` で統一** (`Env` は使わない) | プロジェクトコンベンション                                                                                                                                                                                                               |
 
 ## 議論経緯 (時系列)
 
@@ -151,12 +152,19 @@ Dynamic は Open-Ended の延長線上だが、LLM が**コードを書く** こ
 9. **題材を中目黒 → 横浜 (関内周辺) に変更** (登壇者の地元)
 10. README にアーキテクチャ Mermaid 図 (3 つに分割)
 11. Admin 機構: `localStorage` + `env.ADMIN_TOKEN`
-12. **大改修**: ModeSelector 撤去、Code Mode 常時 ON
-13. **擬似 Response { contentType, body }** に統一、Content-Type で UI 分岐
-14. **JSX + worker-bundler + sucrase** で LLM が JSX を書けるように
-15. **共有 UI コンポーネント** (`src/ui-components.tsx`) を Dynamic Worker に inject
+12. (一時的) ModeSelector 撤去、Code Mode 常時 ON、擬似 Response { contentType, body } で UI 分岐に統一
+13. **登壇演出のため 4 バンド構成に戻す** (2026-06-01)
+    → Controlled / Declarative / Open-Ended / **Dynamic** を ModeSelector で切替
+    → 古典 3 バンドは echo back ツール (render_ui / render_html) で素朴に実装
+    → Dynamic だけ新世代 (Code Mode + Dynamic Worker + JSX)
+14. **Dynamic を hono-eval パターンに再実装** (2026-06-01)
+    → 元々の `@cloudflare/codemode` 経由 → うまく動かない部分があったため
+    → `@cloudflare/worker-bundler` + `env.LOADER` 直叩き + `worker.fetch()` パターンに切替
+    → LLM が完全な Worker module を書く
+    → React + react-dom + restaurant-ui は worker-bundler が npm registry から resolve
+    → `react-dom/server.edge` を強制 (node 版は util require で動かないため)
+15. **共有 UI コンポーネント** (`src/ui-components.tsx`) を Dynamic Worker に bundle 同梱
     → LLM が `<RestaurantList />` を借用するか raw JSX で書くかを自由に選べる
-    → ModeSelector を完全に撤去し、Spectrum は LLM の選択として現れる
 
 ## 現在の実装ステータス
 
@@ -166,48 +174,55 @@ Dynamic は Open-Ended の延長線上だが、LLM が**コードを書く** こ
 - ✅ ModelSelector (6 モデル, デフォルト Kimi K2.6)
 - ✅ D1 (restaurants) + R2 (PHOTOS) バインド + 横浜 18 件シード
 - ✅ `search_restaurants` ツール (D1 検索)
-- ✅ **Code Mode + JSX + React 環境** (`makeReactCodeTool` in `src/tools/code-mode-react.ts`)
-  - sucrase で JSX → React.createElement
-  - worker-bundler で React / react-dom/server / restaurant-ui を ESM バンドル
-  - DynamicWorkerExecutor の modules として inject
-- ✅ Content-Type ベースの UI 分岐 (`ResponseView` in `src/client/Chat.tsx`)
-- ✅ 共有 UI コンポーネント (`src/ui-components.tsx`、両側で同一)
+- ✅ **4 バンド構成** (ModeSelector で切替):
+  - Controlled: search_restaurants 直叩き → RestaurantList でレンダ
+  - Declarative: search_restaurants + `render_ui` (echo back) → DeclarativeView
+  - Open-Ended: search_restaurants + `render_html` (echo back) → iframe + CSP
+  - **Dynamic ✨**: `dynamic_render` (hono-eval パターン) → 完全な Worker module を spawn → SSR HTML
+- ✅ **Dynamic = hono-eval パターン** (`src/tools/dynamic-render.ts`):
+  - LLM は `{ search: SearchInput, code: string }` を出力
+  - host で search 実行 → `createWorker` で bundle (react/react-dom を npm 解決) → `env.LOADER.get` で spawn → `worker.getEntrypoint().fetch()` で HTML 取得
+  - `react-dom/server.edge` を prompt + string replace で強制
+  - restaurant-ui は files に同梱して `'./restaurant-ui'` で相対 import 可能
+- ✅ 共有 UI コンポーネント (`src/ui-components.tsx`、Chat 側と Dynamic Worker の両方で同一実装)
 - ✅ `@callable registerRestaurant`: 画像 DnD → Vision + 正規化 → D1+R2 → saveMessages
 - ✅ Admin token (localStorage + env.ADMIN_TOKEN)
-- ✅ ヘッダーに ModelSelector / Clear / Admin / ステータス
-- ✅ 進行状況表示 (思考中スピナー)
-- ✅ チャット入力欄で ↑↓ で過去発話を辿れる
+- ✅ ヘッダーに ModeSelector / ModelSelector / Clear / Admin / カラーステータス
+- ✅ AI メッセージにモードバッジ (Controlled/Declarative/Open-Ended/Dynamic)
+- ✅ Declarative/Open-Ended/Dynamic では search_restaurants の生結果表示を抑制 (重複防止)
+- ✅ 進行状況表示 (思考中スピナー)、Clear ボタン、チャット入力欄で ↑↓ で履歴辿り
+- ✅ 空状態にサンプルクエリチップ (デモ中に即送信できる)
 - ✅ prettier (hono 設定)、型チェック (`tsc --noEmit`) と本番ビルド (`vite build`)
-- ✅ README のアーキテクチャ解説を新設計に合わせて全面書き換え
+- ✅ E2E 動作確認 (Kimi K2.6 で 4 バンドそれぞれ動作)
 
 ### 未完了 / 要対応
 
-- ⚠️ **エンドツーエンドの動作確認**: Workers AI を叩いて LLM が実際に JSX を書いて Dynamic Worker で動かす流れがエラー無く通るか、十分に確認していない。リハーサル必須
+- ⚠️ **React Max update depth warning**: AI SDK の useChat の useSyncExternalStore で React が警告を出すことがある。動作は OK だがコンソールが汚れる
 - ⚠️ **Google Places API**: 住所/座標は `null` のまま (キー未設定)。本番までに `wrangler secret put GOOGLE_PLACES_API_KEY` + `src/tools/add-restaurant.ts` の埋め込み
 - ⚠️ **D1 リモートデプロイ**: `wrangler.jsonc` の `database_id: "local"` を実際の DB ID に置き換え (`wrangler d1 create generative-ui-playground` で取得)
 - ⚠️ **R2 バケット作成**: `wrangler r2 bucket create generative-ui-playground-photos`
 - ⚠️ **本番デプロイ未検証**: `bun run deploy` をまだ試していない
-- ⚠️ **worker-bundler の初回コスト**: 起動直後の最初のリクエストは React / react-dom/server / restaurant-ui を bundle するので遅い。本番では起動時に warm-up したい
-- ⚠️ **スタイリング磨き込み**: 「あとで」となっている。3 モードの視覚的な差別化はさらに強化できる余地あり (登壇前)
-- ⚠️ **登壇用リハーサル**: 想定する 5 つのデモシナリオを Kimi K2.6 で実行して、想定通りの Spectrum 移動が起きるか確認
+- ⚠️ **worker-bundler の初回コスト**: Dynamic の最初の呼び出しは npm から react / react-dom を fetch + bundle するため遅い。本番では起動時に warm-up または cache 戦略が必要
+- ⚠️ **登壇用リハーサル**: 想定するデモシナリオを通しで実行
 
 ## 今後の検討候補 (登壇前に時間があれば)
 
-ユーザ提案 (2026-05-31 後半):
-
-1. **ガチの Response を返す** — `new Response(body, { headers: { 'content-type': ... } })` を LLM の関数戻り値として実際に返す。AI SDK の JSON シリアライズを越えるには codemode の executor を介さず `env.LOADER` 直叩きで Response を受け取るフローへ作り替える必要あり。「LLM が Worker のハンドラーを書いてる」感が更に増す
-2. **`list_components()` ツール** — LLM が「使えるコンポーネント一覧」を動的に取得できる仕組み。prompt 直書きから動的化、MCP Apps の文脈にも繋がる。実装軽い・効果大
-3. **ストリーミング描画** — `search_restaurants` の tool-call part が来た時点で先行レンダして、codemode の最終結果と差し替え or マージ。コンポーネント借用ルートが高速・ストリーム描画になり、Spectrum に **性能軸**が加わる
+1. **ガチの Response を返す** (実は dynamic_render で既に実現済み — hono-eval パターンで `worker.fetch()` の `Response` を受けてる)
+2. **`list_components()` ツール** — LLM が「使えるコンポーネント一覧」を動的に取得できる仕組み。prompt 直書きから動的化、MCP Apps の文脈にも繋がる
+3. **ストリーミング描画** — `search_restaurants` の tool-call part が来た時点で先行レンダ。コンポーネント借用ルートが高速・ストリーム描画になり、Spectrum に **性能軸**が加わる
+4. **Open-Ended の Tailwind CDN 許可** — iframe 内で見栄えを上げたい時の選択肢
+5. **React Max update depth warning の解消** — useAgentChat 内部のループ。動作問題はないが console が汚れる
 
 ## デモシナリオ (リハーサル基準)
 
-ModeSelector を撤去した今、LLM への要望文で Spectrum 上を移動する:
+ModeSelector で 4 バンドを切り替えながら、同じ質問「**関内で静かに飲みたい**」を投げて UI の違いを見せる:
 
-1. 「関内で静かに飲みたい」 → LLM はシンプルに `<RestaurantList />` 借用 (Controlled 寄り)
-2. 「目的別に整理して」 → `gui-tree+json` を返して DeclarativeView 描画 (Declarative 寄り)
-3. 「マップで表示して」 / 「もっと派手に」 → 自分で SVG + raw JSX で凝る (Open-Ended 寄り)
-4. 「今朝行ったラーメン屋を登録 (写真 DnD)」 → 登録フロー
-5. 「あの店みたいなとこ他にある？」 → 新登録分が hit
+1. **Controlled** → search_restaurants だけで RestaurantList カードが並ぶ (シンプル)
+2. **Declarative** → 「静かに過ごせるお店」のセクション + Card プリミティブで整理された UI
+3. **Open-Ended** → 独自デザインの HTML が iframe で出る (色使い、レイアウト自由)
+4. **Dynamic ✨** → LLM が書いた **完全な Worker module** が表示され、Dynamic Worker で SSR された HTML が iframe に流れる
+   - 「これがクライマックス: LLM が書く SSR、Cloudflare Worker Loader で実行」
+5. (フォームレス登録デモ) Admin モードで画像 DnD + 自然文 → Vision + 正規化 → D1+R2 保存
 
 ## やらないこと (スコープ外)
 

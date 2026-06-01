@@ -92,7 +92,7 @@ flowchart TB
   PartView -->|tool-search_restaurants| RList["RestaurantList<br/>(Controlled バンド)"]
   PartView -->|tool-render_ui| DV["DeclarativeView<br/>(Declarative バンド)"]
   PartView -->|tool-render_html| OEV["OpenEndedView<br/>(Open-Ended バンド, iframe + CSP)"]
-  PartView -->|tool-codemode| CMV["CodeModeView<br/>(Dynamic バンド, 生成コード + SSR 結果)"]
+  PartView -->|tool-dynamic_render| DRV["DynamicRenderView<br/>(Dynamic バンド, 生成コード + SSR HTML)"]
 ```
 
 ## Layer 2 — Worker (Hono + Agent)
@@ -107,32 +107,35 @@ flowchart TB
   Sw --> Ctl["Controlled<br/>{ search_restaurants }"]
   Sw --> Dcl["Declarative<br/>{ search_restaurants, render_ui }"]
   Sw --> Oe["Open-Ended<br/>{ search_restaurants, render_html }"]
-  Sw --> Dy["Dynamic ✨<br/>{ codemode }<br/>(React + Dynamic Worker)"]
+  Sw --> Dy["Dynamic ✨<br/>{ dynamic_render }<br/>(React + Dynamic Worker)"]
   Agent --> Reg["@callable registerRestaurant()<br/>Vision → 正規化 → R2 + D1<br/>→ saveMessages"]
 ```
 
 ## Layer 3 — Dynamic Worker サンドボックス (Dynamic バンドのみ)
 
-`codemode` ツール実行時、`@cloudflare/codemode` の `DynamicWorkerExecutor` が `env.LOADER` を使って **隔離 Worker をスピンアップ**し、LLM のコードを走らせる。
+`dynamic_render` ツール実行時、`@cloudflare/worker-bundler` で LLM が書いた **完全な Cloudflare Worker module** をランタイムでバンドルし、`env.LOADER.get(...)` で **新しい Worker をスピンアップ**して `worker.getEntrypoint().fetch(request)` で実行する ([hono-eval](https://github.com/yusukebe/hono-eval) と同じパターン)。
 
-サンドボックスには `react` / `react-dom/server` / `restaurant-ui` (共有コンポーネント) が **modules として inject 済み**で、LLM のコードから `await import('react')` 等で取り出せる。外部 fetch は `globalOutbound: null` で遮断、ホストとの通信は Workers RPC のみ。
+ホスト側で先に `search_restaurants` を実行し、結果を `request.body` に乗せて Worker に渡す。Worker は React で `renderToString` を呼んで HTML を生成し、`Response` として返す。
 
 ```mermaid
 flowchart LR
-  CT["codemode tool execute<br/>(host)"] -->|sucrase で JSX 変換| TX["transformed JS"]
-  TX -->|DynamicWorkerExecutor.execute| DW["Dynamic Worker<br/>(隔離サンドボックス)"]
-  DW -->|fetch ブロック| X1["外部 (不可)"]
-  DW <-->|Workers RPC| CT
-  CT --> ST["search_restaurants tool<br/>(D1 を叩く)"]
+  DR["dynamic_render tool execute<br/>(host)"] -->|1. search_restaurants 実行| DB[(D1)]
+  DR -->|2. createWorker でバンドル<br/>(react, react-dom を npm 解決)| WB["bundled modules"]
+  WB -->|3. env.LOADER.get でスピンアップ| DW["Dynamic Worker<br/>(隔離サンドボックス)"]
+  DR -->|4. worker.getEntrypoint().fetch<br/>body: { restaurants }| DW
+  DW -->|5. renderToString → HTML Response| DR
+  DW -.->|外部 fetch ブロック<br/>(globalOutbound: null)| X1["外部 (不可)"]
 ```
 
-サンドボックス内 modules:
+worker-bundler の入力 (`createWorker`):
 
-| Key                | 中身                                                           |
-| ------------------ | -------------------------------------------------------------- |
-| `react`            | worker-bundler で React を ESM バンドルしたもの                |
-| `react-dom/server` | 同上 (renderToString / renderToStaticMarkup)                   |
-| `restaurant-ui`    | `src/ui-components.tsx` を worker-bundler で TSX → JS バンドル |
+| ファイル                | 中身                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| `src/index.tsx`         | LLM が書いた Worker module (export default { async fetch(request) {...} })      |
+| `src/restaurant-ui.tsx` | `src/ui-components.tsx` の中身を `'./restaurant-ui'` で借用可能にするためコピー |
+| `package.json`          | `{ "dependencies": { "react": "^19.2.6", "react-dom": "^19.2.6" } }`            |
+
+Worker 内で `react-dom/server.edge` (workerd 互換ビルド) を使うため、`react-dom/server` という拡張子なし import は **host 側で `react-dom/server.edge` に書き換え**ている (node 版は `util` を require するため Worker runtime で動かない)。`prompt` でも `.edge` を必ず使うよう LLM に指示している。
 
 ## 各バンドの LLM 出力例
 
@@ -158,7 +161,6 @@ render_ui({
       heading: '雰囲気重視',
       cards: [
         {
-          type: 'Card',
           title: 'BAR Kingdom',
           subtitle: '関内 / バー',
           body: '...',
@@ -182,13 +184,22 @@ render_html({ html: '<!doctype html><html>...</html>' })
 
 ### Dynamic ✨ (新)
 
-`codemode` で **JSX を含む async アロー関数**を渡す。Dynamic Worker で SSR して HTML を返す。
+`dynamic_render` で **JSX を含む完全な Cloudflare Worker module** を渡す。host 側で `search_restaurants` を実行 → bundled Worker を spawn → `worker.fetch(request)` で SSR HTML を取得。
 
 ```tsx
-;async (codemode) => {
-  const { restaurants } = await codemode.search_restaurants({ area: '関内' })
-  // 既存コンポーネントを借りる (= Controlled 寄り) / 自分で組む (= Open-Ended 寄り) を自由に選べる
-  return renderToString(<RestaurantList restaurants={restaurants} />)
+import React from 'react'
+import { renderToString } from 'react-dom/server.edge'
+import { RestaurantList } from './restaurant-ui'
+
+export default {
+  async fetch(request) {
+    const { restaurants } = await request.json()
+    // 既存コンポーネントを借りる (= Controlled 寄り) / 自分で組む (= Open-Ended 寄り) を自由に選べる
+    const html = renderToString(<RestaurantList restaurants={restaurants} />)
+    return new Response('<!doctype html>' + html, {
+      headers: { 'content-type': 'text/html' },
+    })
+  },
 }
 ```
 
@@ -235,8 +246,8 @@ src/
   tools/
     search-restaurants.ts   D1 検索ツール (全バンド共通)
     render-ui.ts            render_ui / render_html (echo back ツール)
-    code-mode-react.ts      Dynamic バンド用 codemode ツール
-                            (sucrase で JSX 変換 + worker-bundler で React 環境)
+    dynamic-render.ts       Dynamic バンド用 tool (worker-bundler + LOADER で
+                            LLM の Worker module を bundle → spawn → fetch)
     add-restaurant.ts       Vision + 正規化 + D1 + R2 の登録パイプライン
   client/
     main.tsx                React entry
