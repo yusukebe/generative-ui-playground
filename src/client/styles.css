@@ -951,6 +951,41 @@ body,
   line-height: 1.7;
 }
 
+/* エージェントのツール実行 (データ収集) の可視化 */
+.tool-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.tool-activity[data-running='true'] {
+  border-color: var(--accent);
+}
+.tool-activity__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.tool-activity__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tool-activity__chip {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.tool-activity__chip--pending {
+  animation: thinking-bounce 1s infinite ease-in-out;
+}
+
 /* バンド説明 + 生成メトリクス */
 .band-tabs__meta {
   display: flex;

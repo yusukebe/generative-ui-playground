@@ -51,6 +51,14 @@ const BANDS: { id: Band; label: string; desc: string }[] = [
   { id: 'dynamic', label: 'Dynamic ✨', desc: 'AI が React を書き Worker が Suspense SSR' },
 ]
 
+// prepare のツール名 → 表示ラベル (エージェントが何を呼んだか見せる)
+const TOOL_LABELS: Record<string, string> = {
+  get_weather: '🌤️ 天気を取得',
+  get_last_train: '🚃 終電を取得',
+  search_restaurants: '🍶 居酒屋を検索',
+  get_ramen: '🍜 〆ラーメンを取得',
+}
+
 // デモで詰まらないよう、日付・エリア・人数が揃った「一発で通る」例にしておく
 const SAMPLES = [
   '関内で今日、一人で飲みたい',
@@ -70,6 +78,8 @@ export function Compare() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([])
   const [results, setResults] = useState<BandResults>(EMPTY_RESULTS)
   const [band, setBand] = useState<Band>('controlled')
+  const [preparing, setPreparing] = useState(false)
+  const [toolCalls, setToolCalls] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const historyRef = useRef<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
@@ -83,6 +93,15 @@ export function Compare() {
     const el = chatLogRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [convo, intaking])
+
+  // データ収集 (prepare) が終わったら、表示中バンドがまだ idle なら生成を起動
+  useEffect(() => {
+    if (preparing || !params || restaurants.length === 0) return
+    if (results.status[band] === 'idle') {
+      generateBand(band, params, weather, restaurants, lastTrain)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preparing, band, restaurants.length])
 
   const submit = async (text: string) => {
     const t = text.trim()
@@ -103,28 +122,77 @@ export function Compare() {
       if (!res.ok) throw new Error(`intake ${res.status}`)
       const data = (await res.json()) as
         | { ready: false; question: string }
-        | {
-            ready: true
-            params: PlanParams
-            weather: Weather
-            restaurants: Restaurant[]
-            lastTrain: LastTrain
-          }
+        | { ready: true; params: PlanParams }
 
       if (!data.ready) {
         setConvo([...nextConvo, { role: 'assistant', text: data.question }])
       } else {
+        // 条件確定 → プランヘッダを即表示。データは prepare がツール経由で非同期に集める
         setParams(data.params)
-        setWeather(data.weather)
-        setLastTrain(data.lastTrain)
-        setRestaurants(data.restaurants)
+        setWeather(null)
+        setLastTrain(null)
+        setRestaurants([])
         setResults(EMPTY_RESULTS)
-        generateBand(band, data.params, data.weather, data.restaurants, data.lastTrain)
+        prepare(data.params)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'エラー')
     } finally {
       setIntaking(false)
+    }
+  }
+
+  // エージェントがツールでデータを集める prepare ストリームを購読し、解決順にチップ/候補を埋める。
+  // プラン生成 (generateBand) は preparing が終わったら下の effect が起動する。
+  const prepare = async (p: PlanParams) => {
+    setPreparing(true)
+    setToolCalls([])
+    let izakaya: Restaurant[] = []
+    let ramen: Restaurant[] = []
+    try {
+      const res = await fetch('/api/prepare', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ params: p, model }),
+      })
+      if (!res.ok || !res.body) throw new Error(`prepare ${res.status}`)
+      const reader = res.body.getReader()
+      const dec = new TextDecoder()
+      let buf = ''
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        const lines = buf.split('\n')
+        buf = lines.pop() ?? ''
+        for (const l of lines) {
+          if (!l.trim()) continue
+          const ev = JSON.parse(l) as Record<string, unknown>
+          switch (ev.type) {
+            case 'tool':
+              setToolCalls((t) => [...t, ev.name as string])
+              break
+            case 'weather':
+              setWeather((ev.weather as Weather) ?? null)
+              break
+            case 'lasttrain':
+              setLastTrain((ev.lastTrain as LastTrain) ?? null)
+              break
+            case 'izakaya':
+              izakaya = (ev.restaurants as Restaurant[]) ?? []
+              setRestaurants([...izakaya, ...ramen])
+              break
+            case 'ramen':
+              ramen = (ev.restaurants as Restaurant[]) ?? []
+              setRestaurants([...izakaya, ...ramen])
+              break
+          }
+        }
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'prepare エラー')
+    } finally {
+      setPreparing(false)
     }
   }
 
@@ -213,12 +281,8 @@ export function Compare() {
     })
   }
 
-  const switchBand = (b: Band) => {
-    setBand(b)
-    if (ready && params && results.status[b] === 'idle') {
-      generateBand(b, params, weather, restaurants, lastTrain)
-    }
-  }
+  // バンド切替は表示の切替だけ。未生成なら上の effect が生成を起動する
+  const switchBand = (b: Band) => setBand(b)
 
   const clear = () => {
     setConvo([])
@@ -227,6 +291,8 @@ export function Compare() {
     setLastTrain(null)
     setRestaurants([])
     setResults(EMPTY_RESULTS)
+    setPreparing(false)
+    setToolCalls([])
     setError(null)
     setInput('')
   }
@@ -347,25 +413,12 @@ export function Compare() {
           ) : (
             <>
               <div className='plan-head'>
+                {/* 条件は intake で確定したものだけ。天気・終電はツールで集めてプラン本文に出す */}
                 <div className='plan-cond'>
                   <span className='plan-cond__chip'>📅 {params.dateLabel}</span>
                   <span className='plan-cond__chip'>📍 {params.area}</span>
                   <span className='plan-cond__chip'>👥 {params.partySize}人</span>
                   <span className='plan-cond__chip'>🎯 {params.purpose}</span>
-                  {weather && (
-                    <span className='plan-cond__chip'>
-                      {weather.emoji} {weather.label} {weather.tempMax ?? '?'}℃ / 降水
-                      {weather.precipProb ?? '?'}%
-                    </span>
-                  )}
-                  {lastTrain && (
-                    <span
-                      className='plan-cond__chip'
-                      title={`${lastTrain.station}: ${lastTrain.summary}`}
-                    >
-                      🚃 終電 {lastTrain.leaveBy}に出る
-                    </span>
-                  )}
                 </div>
 
                 <div className='seg seg--bands' role='tablist'>
@@ -384,6 +437,22 @@ export function Compare() {
                   ))}
                 </div>
               </div>
+
+              {(preparing || toolCalls.length > 0) && (
+                <div className='tool-activity' data-running={preparing}>
+                  <span className='tool-activity__title'>
+                    {preparing ? '🤖 エージェントがツールでデータ収集中…' : '🤖 収集に使ったツール'}
+                  </span>
+                  <div className='tool-activity__list'>
+                    {toolCalls.map((name, i) => (
+                      <span key={i} className='tool-activity__chip'>
+                        {TOOL_LABELS[name] ?? name}
+                      </span>
+                    ))}
+                    {preparing && <span className='tool-activity__chip tool-activity__chip--pending'>…</span>}
+                  </div>
+                </div>
+              )}
 
               <div className='band-tabs__meta'>
                 <p className='band-tabs__desc'>{BANDS.find((b) => b.id === band)?.desc}</p>

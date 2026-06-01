@@ -8,14 +8,22 @@
  *   Open-Ended  — HTML でプラン1枚
  *   Dynamic     — React コードでプラン → /api/dynamic-frame で Suspense SSR
  */
-import { generateObject, streamObject, streamText, type LanguageModelUsage } from 'ai'
+import {
+  generateObject,
+  stepCountIs,
+  streamObject,
+  streamText,
+  tool,
+  type LanguageModelUsage,
+} from 'ai'
+import { z } from 'zod'
 import { resolveModel } from './llm'
 import type { ModelId } from './models'
 import { DeclarativeUISchema } from './schemas/declarative'
 import { IntakeSchema, PlanSchema, type IntakeResult, type PlanParams } from './schemas/plan'
 import { getLastTrain, type LastTrain } from './tools/lasttrain'
 import { getRamenShops } from './tools/ramen'
-import { findRestaurants } from './tools/search-restaurants'
+import { findRestaurants, SearchInputSchema } from './tools/search-restaurants'
 import { getWeather, type Weather } from './tools/weather'
 import type { Restaurant } from './types'
 
@@ -98,6 +106,133 @@ export async function preparePlan(
   ])
   // 〆ラーメン候補を末尾に合流 (genre='家系ラーメン' で区別) + 終電案内
   return { weather, restaurants: [...izakaya, ...ramen], lastTrain: getLastTrain(params.area) }
+}
+
+/**
+ * 条件データ (天気・終電・居酒屋・〆ラーメン) を **AI エージェントがツールを呼んで** 集め、
+ * 解決した順に NDJSON でストリーム配信する。
+ *   - intake 直後にプランヘッダを出し、ツール結果が返るたびにチップ/候補を非同期で埋める
+ *   - 「エージェントがツールを叩いてデータを集める → 同じ素材を 4 バンドが描き分ける」二段構成
+ *   - ツールが呼ばれなかった場合はホスト側でフォールバック取得 (会場保険)
+ * NDJSON イベント: {type:'tool', name, args} / 'weather' / 'lasttrain' / 'izakaya' / 'ramen' / 'done'
+ */
+export function streamPrepare(
+  env: CloudflareBindings,
+  params: PlanParams,
+  modelId: ModelId
+): Response {
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (o: unknown) => controller.enqueue(encoder.encode(JSON.stringify(o) + '\n'))
+      const { model, isOpenAI } = resolveModel(env, modelId)
+      const providerOptions = isOpenAI
+        ? undefined
+        : { 'workers-ai': { max_tokens: 2048, reasoning_effort: 'low' as const } }
+
+      let gotWeather = false
+      let gotTrain = false
+      let gotIzakaya = false
+      let gotRamen = false
+
+      const tools = {
+        get_weather: tool({
+          description: '指定日(YYYY-MM-DD)の横浜(関内)の天気を取得する。プランに天気を反映するため最初に呼ぶ。',
+          inputSchema: z.object({ date: z.string().describe('対象日 YYYY-MM-DD') }),
+          execute: async ({ date }) => {
+            send({ type: 'tool', name: 'get_weather', args: { date } })
+            const weather = await getWeather(date)
+            gotWeather = true
+            send({ type: 'weather', weather })
+            return weather ?? { label: '取得できず' }
+          },
+        }),
+        get_last_train: tool({
+          description: '指定エリアの終電目安(最寄り駅・終電時刻・店を出る目安)を取得する。',
+          inputSchema: z.object({ area: z.string().describe('エリア名 (例: 関内, 野毛, みなとみらい)') }),
+          execute: async ({ area }) => {
+            send({ type: 'tool', name: 'get_last_train', args: { area } })
+            const lastTrain = getLastTrain(area)
+            gotTrain = true
+            send({ type: 'lasttrain', lastTrain })
+            return lastTrain
+          },
+        }),
+        search_restaurants: tool({
+          description: '居酒屋など飲み会向けの店をエリア・気分で検索する (Google Places / D1)。',
+          inputSchema: SearchInputSchema,
+          execute: async (input) => {
+            send({ type: 'tool', name: 'search_restaurants', args: input })
+            const restaurants = await findRestaurants(env, { ...input, limit: input.limit ?? 6 })
+            gotIzakaya = true
+            send({ type: 'izakaya', restaurants })
+            // モデルに返すのは id と name だけ (プロンプトを膨らませない)
+            return { restaurants: restaurants.map((r) => ({ id: r.id, name: r.name })) }
+          },
+        }),
+        get_ramen: tool({
+          description: '飲んだあとの〆の家系ラーメン候補(横浜)を取得する。',
+          inputSchema: z.object({ count: z.number().nullable().describe('件数 (省略時 4)') }),
+          execute: async ({ count }) => {
+            send({ type: 'tool', name: 'get_ramen', args: { count } })
+            const restaurants = await getRamenShops(count ?? 4)
+            gotRamen = true
+            send({ type: 'ramen', restaurants })
+            return { restaurants: restaurants.map((r) => ({ id: r.id, name: r.name })) }
+          },
+        }),
+      }
+
+      try {
+        const result = streamText({
+          model,
+          tools,
+          stopWhen: stepCountIs(8),
+          providerOptions,
+          prompt: `あなたは横浜の飲み会プランに必要なデータを集めるエージェントです。
+以下の条件に対し、4つのツールを**すべて**呼んで情報を集めてください (順不同・並行で構いません)。
+- get_weather(date="${params.date}")
+- get_last_train(area="${params.area}")
+- search_restaurants(area="${params.area}", query=用途や気分を表す短い語): 飲み会向けの居酒屋を6件ほど
+- get_ramen(): 〆の家系ラーメン候補
+全部のツールを呼び終えたら「集めました」とだけ短く返してください。
+
+条件: ${params.dateLabel}(${params.date}) / ${params.area} / ${params.partySize}人 / 用途:${params.purpose} / 気分:${params.mood || '指定なし'}`,
+        })
+        // ツールの execute を走らせるためにストリームを最後まで駆動する (text は使わない)
+        for await (const _ of result.fullStream) {
+          void _
+        }
+      } catch (e) {
+        console.error('[prepare] agent failed:', e)
+      }
+
+      // フォールバック: エージェントが呼ばなかったツールはホストが補完する
+      try {
+        if (!gotTrain) send({ type: 'lasttrain', lastTrain: getLastTrain(params.area) })
+        if (!gotWeather) send({ type: 'weather', weather: await getWeather(params.date) })
+        if (!gotIzakaya) {
+          const query = [params.purpose, params.mood].filter(Boolean).join(' ')
+          send({
+            type: 'izakaya',
+            restaurants: await findRestaurants(env, { area: params.area, query, limit: 6 }),
+          })
+        }
+        if (!gotRamen) send({ type: 'ramen', restaurants: await getRamenShops(4) })
+      } catch (e) {
+        console.error('[prepare] fallback failed:', e)
+      }
+      send({ type: 'done' })
+      controller.close()
+    },
+  })
+  return new Response(stream, {
+    headers: {
+      'content-type': 'application/x-ndjson; charset=utf-8',
+      'cache-control': 'no-cache',
+      'x-content-type-options': 'nosniff',
+    },
+  })
 }
 
 function dataForPrompt(restaurants: Restaurant[]): string {

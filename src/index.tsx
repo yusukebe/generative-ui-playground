@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { agentsMiddleware } from 'hono-agents'
-import { preparePlan, runIntake, streamBand, type Band } from './compare'
+import { preparePlan, runIntake, streamBand, streamPrepare, type Band } from './compare'
 import { DEFAULT_MODEL, type ModelId } from './models'
 import type { PlanParams } from './schemas/plan'
 import { renderDynamicComponentStream } from './tools/dynamic-render'
@@ -33,8 +33,15 @@ app.post('/api/intake', async (c) => {
     purpose: r.purpose ?? '友人',
     mood: r.mood ?? '',
   }
-  const { weather, restaurants, lastTrain } = await preparePlan(c.env, params)
-  return c.json({ ready: true, params, weather, restaurants, lastTrain })
+  // データ取得 (天気/終電/店/ラーメン) は /api/prepare でツール経由・非同期に行う
+  return c.json({ ready: true, params })
+})
+
+/** 条件が揃ったら、エージェントがツールでデータを集めて NDJSON ストリーム配信 */
+app.post('/api/prepare', async (c) => {
+  const { params, model } = await c.req.json<{ params?: PlanParams; model?: ModelId }>()
+  if (!params) return c.json({ error: 'params required' }, 400)
+  return streamPrepare(c.env, params, model ?? DEFAULT_MODEL)
 })
 
 /** 指定 1 バンドのプランを生成してストリーム配信 (見ているバンドだけオンデマンド) */
