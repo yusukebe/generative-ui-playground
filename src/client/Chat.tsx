@@ -41,7 +41,7 @@ export function Chat() {
     }) as never,
   })
 
-  const { messages, sendMessage, status, clearHistory } = useAgentChat({ agent })
+  const { messages, sendMessage, status, clearHistory, error } = useAgentChat({ agent })
   const [input, setInput] = useState('')
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
@@ -201,8 +201,11 @@ export function Chat() {
           >
             {isAdmin ? '🔓 Admin' : '🔒'}
           </button>
-          <span className='chat__status' data-status={status}>
-            {isRegistering ? 'registering' : status}
+          <span
+            className='chat__status'
+            data-status={isRegistering ? 'streaming' : !error && status === 'error' ? 'ready' : status}
+          >
+            {isRegistering ? 'registering' : !error && status === 'error' ? 'ready' : status}
           </span>
         </div>
       </header>
