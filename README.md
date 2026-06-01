@@ -68,14 +68,14 @@ bun run deploy            # Cloudflare へデプロイ
 
 ```mermaid
 flowchart LR
-  B["Browser<br/>React SPA<br/>(src/client/*)"]
-  W["Cloudflare Worker<br/>Hono + Agents SDK<br/>(src/index.tsx, src/agent.ts)"]
-  S["Dynamic Worker<br/>(Dynamic バンドで<br/>LLM のコードを実行する隔離サンドボックス)"]
-  D["Cloudflare Bindings<br/>AI / D1 / R2 / LOADER"]
+  B["Browser - React SPA"]
+  W["Cloudflare Worker - Hono + Agents SDK"]
+  S["Dynamic Worker - LLM のコードを実行する隔離サンドボックス"]
+  D["Cloudflare Bindings - AI / D1 / R2 / LOADER"]
 
   B <-->|WebSocket| W
-  W -.->|env.LOADER<br/>でスピンアップ| S
-  S -->|Workers RPC で<br/>tool 呼び出し| W
+  W -.->|env.LOADER でスピンアップ| S
+  S -->|Workers RPC で tool 呼び出し| W
   W -->|env| D
 ```
 
@@ -85,12 +85,12 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-  Chat["Chat.tsx<br/>(入力 + DnD + ModeSelector)"] --> Hook["useAgentChat<br/>(@cloudflare/ai-chat/react)"]
-  Hook --> PartView["PartView<br/>(message.parts を type で分岐)"]
-  PartView -->|tool-search_restaurants| RList["RestaurantList<br/>(Controlled バンド)"]
-  PartView -->|tool-render_ui| DV["DeclarativeView<br/>(Declarative バンド)"]
-  PartView -->|tool-render_html| OEV["OpenEndedView<br/>(Open-Ended バンド, iframe + CSP)"]
-  PartView -->|tool-dynamic_render| DRV["DynamicRenderView<br/>(Dynamic バンド, 生成コード + SSR HTML)"]
+  Chat["Chat.tsx - 入力 + DnD + ModeSelector"] --> Hook["useAgentChat フック"]
+  Hook --> PartView["PartView - message.parts を type で分岐"]
+  PartView -->|tool-search_restaurants| RList["RestaurantList - Controlled"]
+  PartView -->|tool-render_ui| DV["DeclarativeView - Declarative"]
+  PartView -->|tool-render_html| OEV["OpenEndedView - Open-Ended, iframe + CSP"]
+  PartView -->|tool-dynamic_render| DRV["DynamicRenderView - Dynamic, SSR HTML"]
 ```
 
 ## Layer 2 — Worker (Hono + Agent)
@@ -99,14 +99,14 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-  Route["/agents/restaurant-agent/default"] --> Mid["agentsMiddleware()<br/>(hono-agents)"]
-  Mid --> Agent["RestaurantAgent<br/>(Durable Object)<br/>state: { model, mode }<br/>messages: 永続化"]
+  Route["/agents/restaurant-agent/default"] --> Mid["agentsMiddleware - hono-agents"]
+  Mid --> Agent["RestaurantAgent - Durable Object, state と messages を永続化"]
   Agent --> Sw["mode で tools を分岐"]
-  Sw --> Ctl["Controlled<br/>{ search_restaurants }"]
-  Sw --> Dcl["Declarative<br/>{ search_restaurants, render_ui }"]
-  Sw --> Oe["Open-Ended<br/>{ search_restaurants, render_html }"]
-  Sw --> Dy["Dynamic ✨<br/>{ dynamic_render }<br/>(React + Dynamic Worker)"]
-  Agent --> Reg["@callable registerRestaurant()<br/>Vision → 正規化 → R2 + D1<br/>→ saveMessages"]
+  Sw --> Ctl["Controlled - search_restaurants"]
+  Sw --> Dcl["Declarative - search_restaurants + render_ui"]
+  Sw --> Oe["Open-Ended - search_restaurants + render_html"]
+  Sw --> Dy["Dynamic - dynamic_render, React + Dynamic Worker"]
+  Agent --> Reg["registerRestaurant - Vision から正規化して R2 + D1 に保存"]
 ```
 
 ## Layer 3 — Dynamic Worker サンドボックス (Dynamic バンドのみ)
@@ -117,12 +117,12 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-  DR["dynamic_render tool execute<br/>(host)"] -->|1. search_restaurants 実行| DB[(D1)]
-  DR -->|2. createWorker でバンドル<br/>(react, react-dom を npm 解決)| WB["bundled modules"]
-  WB -->|3. env.LOADER.get でスピンアップ| DW["Dynamic Worker<br/>(隔離サンドボックス)"]
-  DR -->|4. worker.getEntrypoint().fetch<br/>body: { restaurants }| DW
-  DW -->|5. renderToString → HTML Response| DR
-  DW -.->|外部 fetch ブロック<br/>(globalOutbound: null)| X1["外部 (不可)"]
+  DR["dynamic_render tool execute - host"] -->|1 search_restaurants 実行| DB[("D1")]
+  DR -->|2 createWorker でバンドル react と react-dom を npm 解決| WB["bundled modules"]
+  WB -->|3 env.LOADER.get でスピンアップ| DW["Dynamic Worker - 隔離サンドボックス"]
+  DR -->|4 worker.fetch で restaurants を渡す| DW
+  DW -->|5 renderToString して HTML Response| DR
+  DW -.->|外部 fetch はブロック| X1["外部 - 不可"]
 ```
 
 worker-bundler の入力 (`createWorker`):
