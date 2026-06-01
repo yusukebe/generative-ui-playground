@@ -206,25 +206,25 @@ export default {
 ```mermaid
 sequenceDiagram
   participant U as Admin User
-  participant C as Client (Chat.tsx)
-  participant A as RestaurantAgent (DO)
+  participant C as Client
+  participant A as RestaurantAgent
   participant V as Workers AI Vision
-  participant N as Workers AI (Llama 3.3 70B)
+  participant N as Workers AI 正規化
   participant R as R2
   participant D as D1
 
   U->>C: テキスト「関内のラーメン屋」+ 画像 DnD
-  C->>A: agent.stub.registerRestaurant({ text, imageDataUrl, adminToken })
+  C->>A: registerRestaurant で text と imageDataUrl と adminToken を送る
   A->>A: env.ADMIN_TOKEN で認証
-  A->>V: ai.run('llama-3.2-11b-vision-instruct', { image, prompt })
+  A->>V: Vision モデルで画像を解析
   V-->>A: 「二郎系の濃厚ラーメンの写真」
-  A->>N: generateObject({ schema: NormalizedSchema })
-  N-->>A: { name, area, genre, tags, atmosphere, price_range, note }
-  A->>R: PHOTOS.put(uuid, bytes)
-  A->>D: INSERT INTO restaurants (...)
-  A->>A: this.saveMessages([userMsg, assistantMsg])
+  A->>N: generateObject で構造化
+  N-->>A: name / area / genre / tags / atmosphere / price_range / note
+  A->>R: PHOTOS に画像を保存
+  A->>D: restaurants に INSERT
+  A->>A: saveMessages で履歴に追加
   A-->>C: 新メッセージが WebSocket で同期
-  C-->>U: チャット履歴に「✅ 保存しました」が表示
+  C-->>U: チャット履歴に「保存しました」が表示
   Note over U,D: 次の search_restaurants で新登録分も hit する
 ```
 
