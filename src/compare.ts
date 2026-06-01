@@ -136,51 +136,64 @@ export function streamPrepare(
       let gotTrain = false
       let gotIzakaya = false
       let gotRamen = false
+      // 同じツールを2回以上呼ばれても再 fetch / 再 emit しない (キャッシュ返し)
+      let wRet: unknown
+      let ltRet: unknown
+      let izRet: unknown
+      let rmRet: unknown
 
       const tools = {
         get_weather: tool({
-          description: '指定日(YYYY-MM-DD)の横浜(関内)の天気を取得する。プランに天気を反映するため最初に呼ぶ。',
+          description: '指定日(YYYY-MM-DD)の横浜(関内)の天気を取得する。1回だけ呼ぶ。',
           inputSchema: z.object({ date: z.string().describe('対象日 YYYY-MM-DD') }),
           execute: async ({ date }) => {
+            if (gotWeather) return wRet
+            gotWeather = true
             send({ type: 'tool', name: 'get_weather', args: { date } })
             const weather = await getWeather(date)
-            gotWeather = true
             send({ type: 'weather', weather })
-            return weather ?? { label: '取得できず' }
+            wRet = weather ?? { label: '取得できず' }
+            return wRet
           },
         }),
         get_last_train: tool({
-          description: '指定エリアの終電目安(最寄り駅・終電時刻・店を出る目安)を取得する。',
+          description: '指定エリアの終電目安(最寄り駅・終電時刻・店を出る目安)を取得する。1回だけ呼ぶ。',
           inputSchema: z.object({ area: z.string().describe('エリア名 (例: 関内, 野毛, みなとみらい)') }),
           execute: async ({ area }) => {
+            if (gotTrain) return ltRet
+            gotTrain = true
             send({ type: 'tool', name: 'get_last_train', args: { area } })
             const lastTrain = getLastTrain(area)
-            gotTrain = true
             send({ type: 'lasttrain', lastTrain })
-            return lastTrain
+            ltRet = lastTrain
+            return ltRet
           },
         }),
         search_restaurants: tool({
-          description: '居酒屋など飲み会向けの店をエリア・気分で検索する (Google Places / D1)。',
+          description: '居酒屋など飲み会向けの店をエリア・気分で検索する (Google Places / D1)。1回だけ呼ぶ。',
           inputSchema: SearchInputSchema,
           execute: async (input) => {
+            if (gotIzakaya) return izRet
+            gotIzakaya = true
             send({ type: 'tool', name: 'search_restaurants', args: input })
             const restaurants = await findRestaurants(env, { ...input, limit: input.limit ?? 6 })
-            gotIzakaya = true
             send({ type: 'izakaya', restaurants })
             // モデルに返すのは id と name だけ (プロンプトを膨らませない)
-            return { restaurants: restaurants.map((r) => ({ id: r.id, name: r.name })) }
+            izRet = { restaurants: restaurants.map((r) => ({ id: r.id, name: r.name })) }
+            return izRet
           },
         }),
         get_ramen: tool({
-          description: '飲んだあとの〆の家系ラーメン候補(横浜)を取得する。',
+          description: '飲んだあとの〆の家系ラーメン候補(横浜)を取得する。1回だけ呼ぶ。',
           inputSchema: z.object({ count: z.number().nullable().describe('件数 (省略時 4)') }),
           execute: async ({ count }) => {
+            if (gotRamen) return rmRet
+            gotRamen = true
             send({ type: 'tool', name: 'get_ramen', args: { count } })
             const restaurants = await getRamenShops(count ?? 4)
-            gotRamen = true
             send({ type: 'ramen', restaurants })
-            return { restaurants: restaurants.map((r) => ({ id: r.id, name: r.name })) }
+            rmRet = { restaurants: restaurants.map((r) => ({ id: r.id, name: r.name })) }
+            return rmRet
           },
         }),
       }
