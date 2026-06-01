@@ -12,15 +12,15 @@ import type { SearchInput } from './search-restaurants'
 const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText'
 
 // 必要なフィールドだけ取得する (課金は取得フィールドに依存するため絞る)
+// UI で実際に使うフィールドだけ取得 (レスポンスを軽く・課金も抑える)。
+// location(緯度経度)・userRatingCount は未使用なので外した。
 const FIELD_MASK = [
   'places.id',
   'places.displayName',
   'places.formattedAddress',
-  'places.location',
   'places.primaryTypeDisplayName',
   'places.editorialSummary',
   'places.rating',
-  'places.userRatingCount',
   'places.priceLevel',
   'places.photos',
 ].join(',')

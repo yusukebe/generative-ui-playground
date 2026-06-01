@@ -560,7 +560,12 @@ function BandPanel({
 
   if (band === 'controlled') {
     preview = results.controlled ? (
-      <PlanView plan={results.controlled} restaurants={restaurants} />
+      <PlanView
+        plan={results.controlled}
+        restaurants={restaurants}
+        weather={weather}
+        lastTrain={lastTrain}
+      />
     ) : (
       <Streaming label='プランを組み立て中…' />
     )

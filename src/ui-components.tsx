@@ -52,6 +52,9 @@ export function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {
         flexDirection: 'column',
         gap: 8,
         overflow: 'hidden',
+        // 縦1カラムに置かれても全幅に間延びしないよう上限を持たせる (写真が横長に潰れるのを防ぐ)
+        width: '100%',
+        maxWidth: 360,
         color: colors.text,
         fontFamily:
           "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans', 'Noto Sans JP', sans-serif",
@@ -134,6 +137,66 @@ export function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {
       )}
       </div>
     </article>
+  )
+}
+
+export type WeatherInfo = {
+  emoji: string
+  label: string
+  tempMax: number | null
+  tempMin: number | null
+  precipProb: number | null
+} | null
+
+/** 天気バナー (全バンド共通)。データは上位から渡す。 */
+export function WeatherBanner({ weather }: { weather: WeatherInfo }) {
+  if (!weather) return null
+  return (
+    <div
+      style={{
+        background: 'linear-gradient(135deg,#3b4cca,#5b6ee1)',
+        color: '#fff',
+        borderRadius: 12,
+        padding: '12px 16px',
+        fontWeight: 700,
+        textAlign: 'center',
+        fontFamily:
+          "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans', 'Noto Sans JP', sans-serif",
+      }}
+    >
+      {weather.emoji} {weather.label} / 最高{weather.tempMax ?? '?'}℃ / 降水{weather.precipProb ?? '?'}%
+    </div>
+  )
+}
+
+export type LastTrainInfo = { station: string; summary: string; leaveBy: string } | null
+
+/** 終電案内カード (全バンド共通)。 */
+export function LastTrainCard({ lastTrain }: { lastTrain: LastTrainInfo }) {
+  if (!lastTrain) return null
+  return (
+    <div
+      style={{
+        border: `1px solid ${colors.border}`,
+        borderRadius: 12,
+        padding: '12px 14px',
+        background: colors.surface,
+        display: 'flex',
+        gap: 10,
+        alignItems: 'center',
+        color: colors.text,
+        fontFamily:
+          "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans', 'Noto Sans JP', sans-serif",
+      }}
+    >
+      <span style={{ fontSize: 22 }}>🚃</span>
+      <div>
+        <div style={{ fontWeight: 700, fontSize: 13 }}>終電めやす · {lastTrain.station}</div>
+        <div style={{ fontSize: 12, color: colors.muted }}>
+          {lastTrain.summary} ／ お店は <b>{lastTrain.leaveBy}</b> に出る
+        </div>
+      </div>
+    </div>
   )
 }
 

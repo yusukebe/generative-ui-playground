@@ -1,15 +1,12 @@
 import type { DeclarativeUI } from '../../schemas/declarative'
-import type { Restaurant } from '../../ui-components'
-import { RestaurantCard } from '../../ui-components'
-
-type Weather = {
-  emoji: string
-  label: string
-  tempMax: number | null
-  tempMin: number | null
-  precipProb: number | null
-} | null
-type LastTrain = { station: string; summary: string; leaveBy: string } | null
+import {
+  LastTrainCard,
+  RestaurantCard,
+  WeatherBanner,
+  type LastTrainInfo as LastTrain,
+  type Restaurant,
+  type WeatherInfo as Weather,
+} from '../../ui-components'
 
 // streamObject の途中状態 (DeepPartial) でも描画できるよう loose に扱う
 type PartialBlock = {
@@ -61,28 +58,8 @@ function BlockView({
   weather: Weather
   lastTrain: LastTrain
 }) {
-  if (block.type === 'weather') {
-    if (!weather) return null
-    return (
-      <div className='decl-weather'>
-        {weather.emoji} {weather.label} / 最高{weather.tempMax ?? '?'}℃ / 降水{weather.precipProb ?? '?'}%
-      </div>
-    )
-  }
-  if (block.type === 'lastTrain') {
-    if (!lastTrain) return null
-    return (
-      <div className='decl-train'>
-        <span className='decl-train__icon'>🚃</span>
-        <div>
-          <div className='decl-train__head'>終電めやす · {lastTrain.station}</div>
-          <div className='decl-train__sub'>
-            {lastTrain.summary} ／ お店は <b>{lastTrain.leaveBy}</b> に出る
-          </div>
-        </div>
-      </div>
-    )
-  }
+  if (block.type === 'weather') return <WeatherBanner weather={weather} />
+  if (block.type === 'lastTrain') return <LastTrainCard lastTrain={lastTrain} />
   if (block.type === 'shop') {
     const r = block.restaurantId ? byId.get(block.restaurantId) : undefined
     return (

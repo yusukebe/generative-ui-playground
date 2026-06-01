@@ -1,18 +1,38 @@
 import type { Plan } from '../../schemas/plan'
-import { RestaurantCard, type Restaurant } from '../../ui-components'
+import {
+  LastTrainCard,
+  RestaurantCard,
+  WeatherBanner,
+  type LastTrainInfo,
+  type Restaurant,
+  type WeatherInfo,
+} from '../../ui-components'
 
 /**
  * Controlled バンドのプラン描画。
  * AI は既製の「プラン」テンプレ (weatherNote / steps / tip) に値を流し込むだけ。
- * ここで固定レイアウトに dispatch する。
+ * 天気/終電/店は**全バンド共通のコンポーネント** (WeatherBanner / LastTrainCard / RestaurantCard) で
+ * 固定レイアウトに dispatch する。
  */
-export function PlanView({ plan, restaurants }: { plan: Plan | null; restaurants: Restaurant[] }) {
+export function PlanView({
+  plan,
+  restaurants,
+  weather = null,
+  lastTrain = null,
+}: {
+  plan: Plan | null
+  restaurants: Restaurant[]
+  weather?: WeatherInfo
+  lastTrain?: LastTrainInfo
+}) {
   if (!plan) return null
   const byId = new Map(restaurants.map((r) => [r.id, r]))
   return (
     <div className='plan'>
       {plan.title && <h3 className='plan__title'>{plan.title}</h3>}
+      <WeatherBanner weather={weather} />
       {plan.weatherNote && <div className='plan__weather'>☔️ {plan.weatherNote}</div>}
+      <LastTrainCard lastTrain={lastTrain} />
       <ol className='plan__steps plan__steps--grid'>
         {plan.steps.map((s, i) => {
           const r = byId.get(s.restaurantId)
