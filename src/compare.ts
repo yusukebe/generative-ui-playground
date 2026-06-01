@@ -436,6 +436,7 @@ function App({ restaurants }) {
   return (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Suspense fallback={<WeatherSkeleton />}><Weather date="${params.date}" /></Suspense>
+      <LastTrain area="${params.area}" />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
         {restaurants.map((r, i) => (
           <div key={r.id}>
@@ -446,7 +447,6 @@ function App({ restaurants }) {
       </div>
       <h2 style={{ fontSize: 14, margin: 0 }}>〆のラーメン</h2>
       <Suspense fallback={<CardSkeleton />}><RamenList count={1} /></Suspense>
-      <LastTrain area="${params.area}" />
     </div>
   )
 }
