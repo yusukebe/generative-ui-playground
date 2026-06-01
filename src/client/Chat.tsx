@@ -210,9 +210,29 @@ export function Chat() {
       <div className='chat__messages'>
         {messages.length === 0 && (
           <div className='chat__empty'>
-            気分や条件を入力してください。例: 「関内で静かに飲みたい」
-            <br />
-            <small>📷 画像をドロップしてお店を登録することもできます。</small>
+            <p>気分や条件を入力してください</p>
+            <div className='chat__samples'>
+              {[
+                '関内で静かに飲みたい',
+                '中華街で点心',
+                '野毛でラーメン',
+                'みなとみらいでデート',
+              ].map((q) => (
+                <button
+                  key={q}
+                  type='button'
+                  className='chat__sample'
+                  onClick={() => {
+                    if (isBusy) return
+                    sendMessage({ text: q })
+                  }}
+                  disabled={isBusy}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+            <small>📷 画像をドロップしてお店を登録することもできます (Admin のみ)</small>
           </div>
         )}
         {messages.map((m) => (
