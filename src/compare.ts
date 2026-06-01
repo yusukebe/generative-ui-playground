@@ -23,7 +23,7 @@ import { DeclarativeUISchema } from './schemas/declarative'
 import { IntakeSchema, PlanSchema, type IntakeResult, type PlanParams } from './schemas/plan'
 import { getLastTrain, type LastTrain } from './tools/lasttrain'
 import { getRamenShops } from './tools/ramen'
-import { findRestaurants, SearchInputSchema } from './tools/search-restaurants'
+import { findRestaurants, getRestaurantsCached, SearchInputSchema } from './tools/search-restaurants'
 import { getWeather, type Weather } from './tools/weather'
 import type { Restaurant } from './types'
 
@@ -405,6 +405,9 @@ ${ctxPhotos}`,
         } else {
           // Dynamic は事前収集しない。restaurants(お店) のみ描画時に host が prop で渡す
           // (Places=要キー)。天気/〆ラーメンはキー不要なので worker のコンポーネントが描画時に取得。
+          // ★ コード生成と並行してお店検索を先に走らせておく (描画時=dynamic-frame で再利用)。
+          const dq = [params.craving, params.purpose, params.mood].filter(Boolean).join(' ')
+          getRestaurantsCached(env, { area: params.area, query: dq, limit: 2 })
           const dynCtx = `条件: ${params.dateLabel}(${params.date}) / ${params.area} / ${params.partySize}人 / 用途:${params.purpose} / 気分:${params.mood || '指定なし'}
 ※ restaurants(お店) は描画時に props で渡されます。データは埋め込まず props を使うこと。`
           const { textStream, text, usage } = streamText({
