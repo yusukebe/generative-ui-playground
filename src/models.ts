@@ -1,6 +1,8 @@
 export type ModelId =
-  | '@cf/meta/llama-4-scout-17b-16e-instruct'
+  | '@cf/openai/gpt-oss-120b'
+  | '@cf/mistralai/mistral-small-3.1-24b-instruct'
   | '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
+  | '@cf/meta/llama-4-scout-17b-16e-instruct'
   | '@cf/meta/llama-3.1-8b-instruct'
   | '@cf/google/gemma-3-12b-it'
   | '@cf/qwen/qwen2.5-coder-32b-instruct'
@@ -14,16 +16,28 @@ export type ModelInfo = {
 
 export const MODELS: ModelInfo[] = [
   {
-    id: '@cf/meta/llama-4-scout-17b-16e-instruct',
-    label: 'Llama 4 Scout',
-    vendor: 'Meta',
-    description: '17B MoE · 万能型で速い',
+    id: '@cf/openai/gpt-oss-120b',
+    label: 'GPT-OSS 120B',
+    vendor: 'OpenAI',
+    description: '120B · agentic / tool calling 安定',
+  },
+  {
+    id: '@cf/mistralai/mistral-small-3.1-24b-instruct',
+    label: 'Mistral Small 3.1',
+    vendor: 'Mistral AI',
+    description: '24B · 多言語 + function calling',
   },
   {
     id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
     label: 'Llama 3.3 70B',
     vendor: 'Meta',
     description: '70B fp8 fast · 高品質',
+  },
+  {
+    id: '@cf/meta/llama-4-scout-17b-16e-instruct',
+    label: 'Llama 4 Scout',
+    vendor: 'Meta',
+    description: '17B MoE · 万能型で速い',
   },
   {
     id: '@cf/meta/llama-3.1-8b-instruct',
