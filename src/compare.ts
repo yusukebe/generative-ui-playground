@@ -364,9 +364,10 @@ ${ctx}`,
 使える部品 type は weather / lastTrain / shop の3つ。実データはホストが持つので、あなたは「どれを・どの順で並べるか」を選ぶだけ。
 - intro: 天気をふまえたプラン概要 (1〜2文)
 - blocks (上から並ぶ): **weather → lastTrain → shop(お店) → … → shop(〆) の順**で並べる
-  - weather: { type:"weather" } (天気バナー)
-  - lastTrain: { type:"lastTrain" } (終電案内)
+  - weather: { type:"weather" } (天気バナー) … **先頭に1回だけ**
+  - lastTrain: { type:"lastTrain" } (終電案内) … **1回だけ** (末尾などに重複させない)
   - shop: { type:"shop", restaurantId=店候補の id, label="1軒目"/"2軒目"/"〆", note=理由(短く) }
+- weather と lastTrain は**それぞれ1個まで**。同じ type のブロックを繰り返さないこと
 - **提供された全店を shop にする** (お店→〆家系ラーメンの順)。restaurantId は候補の id を使う
 ${COMMON}
 ${ctx}`,
@@ -387,6 +388,7 @@ ${ctx}`,
 (<!doctype html>〜</html>) で表現してください。
 - 天気バナー、各軒(1軒目/2軒目/〆)、移動・予約メモを含む凝ったデザイン
 - **各店には写真を必ず入れる**: 候補データの photo_url を使い <img src="(photo_url)" ...> を書く
+- **画像は候補データの photo_url だけ**。天気アイコン等の画像URLを創作しない (天気は絵文字＋文字で表現)
 - CSS は <style> インライン、外部リソースは画像(photo_url)のみ可、出力は HTML のみ
 ${COMMON}
 ${ctxPhotos}`,

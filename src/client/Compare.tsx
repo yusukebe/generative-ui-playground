@@ -50,7 +50,7 @@ const EMPTY_RESULTS: BandResults = {
 
 const BANDS: { id: Band; label: string; desc: string }[] = [
   { id: 'controlled', label: 'Controlled', desc: '既製プランテンプレに AI が値を流し込む' },
-  { id: 'declarative', label: 'Declarative', desc: 'section(1軒目/2軒目/〆) を streamObject で順に組む' },
+  { id: 'declarative', label: 'Declarative', desc: '部品(天気/終電/店)を選んで JSON で並べ streamObject で順に組む' },
   { id: 'open-ended', label: 'Open-Ended', desc: 'AI が HTML でプラン1枚をフル生成' },
   { id: 'dynamic', label: 'Dynamic ✨', desc: 'AI が React を書き Worker が Suspense SSR' },
 ]
