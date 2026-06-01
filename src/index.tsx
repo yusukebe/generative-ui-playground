@@ -31,6 +31,7 @@ app.post('/api/intake', async (c) => {
     partySize: r.partySize ?? 2,
     purpose: r.purpose ?? '友人',
     mood: r.mood ?? '',
+    craving: r.craving ?? '',
   }
   // データ取得(天気/終電/店/ラーメン)は各バンド生成のたびに /api/band 内でツール経由で行う
   return c.json({ ready: true, params })

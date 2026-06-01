@@ -79,12 +79,13 @@ ${dateReference()}
 - 曖昧でも代表日に決めてよい。**日付の手がかりがあれば必ず表から選んで date を埋め、日付は二度と聞き返さない**
 
 # 抽出
-会話全体から 日付/エリア/人数/用途/気分 を統合して抽出する。
+会話全体から 日付/エリア/人数/用途/気分/食べたいもの を統合して抽出する。
 - **date・area・partySize の3つが埋まれば ready=true**、question は null
 - どれかが本当に無いときだけ ready=false にし、不足の1つだけを短く質問する
 - 既に分かっている項目は二度と聞かない
 - dateLabel は「来週の金曜 (6/12)」のような人間向け表記
 - エリアは横浜近辺 (関内/中華街/野毛/みなとみらい/桜木町/元町 など)
+- **craving**: 「もつが食べたい」「海鮮で」など具体的な食べ物/ジャンルがあれば入れる (無ければ null)。craving は ready の判定には含めない
 
 会話:
 ${convo}`,
@@ -201,11 +202,11 @@ async function gatherWithTools(
 以下の条件に対し、4つのツールを**すべて**呼んで情報を集めてください (順不同・並行で構いません)。
 - get_weather(date="${params.date}")
 - get_last_train(area="${params.area}")
-- search_restaurants(area="${params.area}", query=用途や気分を表す短い語): 1軒目・2軒目用のお店を2件
+- search_restaurants(area="${params.area}", query="${[params.craving, params.purpose, params.mood].filter(Boolean).join(' ') || 'おすすめ'}"): 1軒目・2軒目用のお店を2件${params.craving ? ` (特に「${params.craving}」が食べられる店を優先)` : ''}
 - get_ramen(): 〆の家系ラーメンを1件
 各ツールは**1回ずつ**呼ぶこと。全部呼び終えたら「集めました」とだけ短く返してください。
 
-条件: ${params.dateLabel}(${params.date}) / ${params.area} / ${params.partySize}人 / 用途:${params.purpose} / 気分:${params.mood || '指定なし'}`,
+条件: ${params.dateLabel}(${params.date}) / ${params.area} / ${params.partySize}人 / 用途:${params.purpose} / 気分:${params.mood || '指定なし'} / 食べたいもの:${params.craving || '指定なし'}`,
     })
     for await (const _ of result.fullStream) {
       void _
@@ -227,7 +228,7 @@ async function gatherWithTools(
       send({ type: 'weather', weather: weatherData })
     }
     if (!gotIzakaya) {
-      const query = [params.purpose, params.mood].filter(Boolean).join(' ')
+      const query = [params.craving, params.purpose, params.mood].filter(Boolean).join(' ')
       izakaya = await findRestaurants(env, { area: params.area, query, limit: 2 })
       send({ type: 'izakaya', restaurants: izakaya })
     }
@@ -274,9 +275,9 @@ function planContext(
   const w = weather
     ? `${weather.emoji} ${weather.label} / 最高${weather.tempMax ?? '?'}℃ 最低${weather.tempMin ?? '?'}℃ / 降水確率${weather.precipProb ?? '?'}%`
     : '不明'
-  return `条件: ${params.dateLabel}(${params.date}) / ${params.area} / ${params.partySize}人 / 用途:${params.purpose} / 気分:${params.mood || '指定なし'}
+  return `条件: ${params.dateLabel}(${params.date}) / ${params.area} / ${params.partySize}人 / 用途:${params.purpose} / 気分:${params.mood || '指定なし'} / 食べたいもの:${params.craving || '指定なし'}
 天気: ${w}
-終電: ${lastTrain.station} … ${lastTrain.summary} (お店を出る目安 ${lastTrain.leaveBy})
+終電: ${lastTrain.station} … ${lastTrain.summary} (お店を出る目安 ${lastTrain.leaveBy})${params.craving ? `\n※ 「${params.craving}」を食べたいという希望があるので、合う店があれば優先しプランに反映する` : ''}
 店候補 (この中の店だけ使う・id 必須。genre が「家系ラーメン」の店は〆ラーメン専用): ${dataForPrompt(restaurants, includePhoto)}
 プラン構成: **提供された全店を使う**。お店(家系ラーメン以外)を「1軒目」「2軒目」、家系ラーメンを「〆」とする (=1軒目・2軒目・〆 の3ステップ)。**最後に終電メモ(${lastTrain.station}の終電目安と「${lastTrain.leaveBy}には出る」)を必ず添える。**`
 }
@@ -459,7 +460,7 @@ ${dynCtx}`,
           for await (const delta of textStream) send({ type: 'dynamic-delta', delta })
           const code = stripFence(await text)
           send({ type: 'dynamic-code', code })
-          const q = [params.purpose, params.mood].filter(Boolean).join(' ')
+          const q = [params.craving, params.purpose, params.mood].filter(Boolean).join(' ')
           const url = `/api/dynamic-frame?area=${encodeURIComponent(params.area)}&q=${encodeURIComponent(q)}&code=${b64urlEncode(code)}`
           send({ type: 'dynamic-frame', url, code })
           metric(await usage, code)

@@ -8,6 +8,7 @@ export type PlanParams = {
   partySize: number
   purpose: string // デート / 接待 / 友人 / 一人 など
   mood: string // 静か / 賑やか など (空でも可)
+  craving: string // 食べたいもの・料理ジャンル (もつ / 海鮮 / 中華 など。空でも可)
 }
 
 // intake: 1行入力から条件を抽出。足りなければ ready=false + question を返す
@@ -21,6 +22,10 @@ export const IntakeSchema = z.object({
   partySize: z.number().nullable().describe('人数'),
   purpose: z.string().nullable().describe('用途 (デート / 接待 / 友人 / 一人 など)'),
   mood: z.string().nullable().describe('気分 (静か / 賑やか など。無ければ null)'),
+  craving: z
+    .string()
+    .nullable()
+    .describe('食べたいもの・料理ジャンル (例: もつ, 海鮮, 中華, 焼き鳥。指定が無ければ null)'),
 })
 
 export type IntakeResult = z.infer<typeof IntakeSchema>

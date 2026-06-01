@@ -170,7 +170,7 @@ export function Compare() {
   // 1バンド = 「ツールでデータ収集 → 描画」を毎回まとめて実行する。
   // ストリームは tool/weather/lasttrain/izakaya/ramen(収集) → render-start → バンド描画 + metrics。
   const generateBand = async (b: Band, p: PlanParams) => {
-    genStartRef.current[b] = undefined // render-start で計測開始
+    genStartRef.current[b] = Date.now() // 初描画は「生成開始(=ツール収集含む)」から測る
     setToolCalls([])
     setWeather(null)
     setLastTrain(null)
@@ -224,8 +224,7 @@ export function Compare() {
               setRestaurants([...izakaya, ...ramen])
               break
             case 'render-start':
-              genStartRef.current[b] = Date.now() // 初描画 TTFR はここから
-              break
+              break // 初描画は生成開始から測るのでここでは何もしない
             default:
               onBandEvent(b, ev)
           }
@@ -493,12 +492,23 @@ export function Compare() {
               )}
 
               <div className='band-tabs__meta'>
-                <p className='band-tabs__desc'>{BANDS.find((b) => b.id === band)?.desc}</p>
+                <p className='band-tabs__desc'>
+                  {BANDS.find((b) => b.id === band)?.desc}
+                  <button
+                    type='button'
+                    className='band-reload'
+                    title='このバンドをもう一度生成 (ツール収集→描画)'
+                    disabled={results.status[band] === 'streaming'}
+                    onClick={() => params && generateBand(band, params)}
+                  >
+                    ↻ リロード
+                  </button>
+                </p>
                 <span className='band-metric-row'>
                   {results.ttfr[band] !== undefined && (
                     <span
                       className='band-metric band-metric--ttfr'
-                      title='初描画: 最初の可視コンテンツが出るまで。streamObject/SSR ストリーミングは速い'
+                      title='初描画: 生成開始(ツール収集を含む)から最初の可視コンテンツが出るまで'
                     >
                       ⚡ 初描画 {((results.ttfr[band] as number) / 1000).toFixed(1)}s
                     </span>

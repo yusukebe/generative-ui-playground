@@ -1016,6 +1016,22 @@ body,
   animation: thinking-bounce 1s infinite ease-in-out;
 }
 
+/* Dynamic フレームのローディング (白画面回避) */
+.band-frame-wrap {
+  min-width: 0;
+}
+.band-frame__loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 24px;
+  color: var(--text-muted);
+  font-size: 13px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
 /* バンド説明 + 生成メトリクス */
 .band-tabs__meta {
   display: flex;
@@ -1044,6 +1060,24 @@ body,
   color: #2563eb;
   background: rgba(37, 99, 235, 0.08);
   border-color: rgba(37, 99, 235, 0.2);
+}
+.band-reload {
+  margin-left: 8px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.band-reload:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.band-reload:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* 4バンド比較ビュー */
