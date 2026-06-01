@@ -18,6 +18,51 @@
 
 > 「これが未来です」がかっこいい着地。
 
+### プレゼン構成 (2026-06-06 登壇)
+
+本デモアプリが登壇のどこで使われるかと、各セクションで見せたい挙動の対応:
+
+| # | セクション | このリポの関わり |
+| --- | --- | --- |
+| 1 | 前回のおさらい (MCP-UI) | — |
+| 2 | MCP-UI → MCP Apps への進化 | — |
+| 3 | MCP Apps の説明 | — |
+| 4 | Generative UI という大きな流れ | — |
+| 5 | Spectrum の説明 (Controlled / Declarative / Open-Ended) | — |
+| 6 | **デモを作ってみた** | **3 バンドそれぞれで同じ質問を投げ、UI が違うことを見せる** |
+| 7 | **第 4 のパターン「Dynamic」** ⭐ | **同じ題材を Dynamic (Code Mode + Dynamic Worker + JSX SSR) で投げて、先の 3 つを超える表現力を見せる** |
+| 8 | Generative UI のまとめ | — |
+| 9 | 補足: エージェント時代にフォームはなくなる？ | **フォームレス登録デモ (Admin で画像 D&D + 自然文 → Vision + Places 正規化 → D1+R2 保存)** |
+| 10 | みんなの新聞のデモ ([everyones-times.yusuke.run](https://everyones-times.yusuke.run/)) | (別アプリ) |
+| 11 | 全体のまとめ: 「**UI はなくならないが、AI が UI を作る**」 | — |
+
+ストーリーアーチ:
+
+- セクション 9 で **「定型フォームは消える」** を見せ、
+- セクション 11 で **「でも UI 自体はなくならない (AI が UI を作る側に回る)」** で着地
+
+→ サブテーマ「フォーム UI は消える」が**メイントピックの中に綺麗に組み込まれる**構成。
+
+### Dynamic バンド (第 4 の追加)
+
+CopilotKit の Spectrum は 3 バンドだが、本デモでは **4 つ目「Dynamic」**を提案する位置付け:
+
+| バンド | LLM 出力 | 実装ハイライト |
+| --- | --- | --- |
+| Controlled | tool call で props | 事前定義コンポーネント dispatch |
+| Declarative | JSON UI ツリー | プリミティブ語彙の再帰描画 |
+| Open-Ended | HTML 文字列 | iframe + CSP |
+| **Dynamic** ✨ | **JSX (動的にコード生成)** | **Dynamic Worker で SSR、コンポーネント借用可** |
+
+Dynamic は Open-Ended の延長線上だが、LLM が**コードを書く** ことで:
+- サンドボックス隔離が標準で付く (Worker Loader)
+- React 環境 (renderToString) が走る
+- 既存コンポーネントを借用できる → Spectrum を内側でグラデーションできる
+
+セクション 7 のクライマックスでこの位置付けを宣言する:
+
+> 「Generative UI Spectrum には 3 つのバンドがあると言われています。でも僕は **4 つ目**を提案します — それが **Dynamic** です。これが LLM が書く SSR、未来の Generative UI の姿です。」
+
 ### 別フレーミング: 「LLM が書く SSR / JIT SSR」
 
 このデモの仕組みは本質的に **サーバーサイドレンダリング**そのもの。違うのは「誰が書いたか」:
