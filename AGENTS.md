@@ -171,7 +171,7 @@ Dynamic は Open-Ended の延長線上だが、LLM が**コードを書く** こ
 ### 完了
 
 - ✅ React 19 SPA + Vite + Hono + Cloudflare Agents SDK の足場
-- ✅ ModelSelector (5 モデル, デフォルト Llama 3.3 70B fp8 fast。Kimi K2.6 は Workers AI 上で遅すぎたため外した)
+- ✅ ModelSelector (5 モデル, デフォルト Llama 4 Scout。Kimi K2.6 は Workers AI 上で遅すぎたため外した)
 - ✅ D1 (restaurants) + R2 (PHOTOS) バインド + 横浜 18 件シード
 - ✅ `search_restaurants` ツール (D1 検索)
 - ✅ **4 バンド構成** (ModeSelector で切替):

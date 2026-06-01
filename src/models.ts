@@ -1,6 +1,6 @@
 export type ModelId =
-  | '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
   | '@cf/meta/llama-4-scout-17b-16e-instruct'
+  | '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
   | '@cf/meta/llama-3.1-8b-instruct'
   | '@cf/google/gemma-3-12b-it'
   | '@cf/qwen/qwen2.5-coder-32b-instruct'
@@ -14,16 +14,16 @@ export type ModelInfo = {
 
 export const MODELS: ModelInfo[] = [
   {
-    id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
-    label: 'Llama 3.3 70B',
-    vendor: 'Meta',
-    description: '70B fp8 fast · 高品質で速い',
-  },
-  {
     id: '@cf/meta/llama-4-scout-17b-16e-instruct',
     label: 'Llama 4 Scout',
     vendor: 'Meta',
-    description: '17B MoE · 万能型',
+    description: '17B MoE · 万能型で速い',
+  },
+  {
+    id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+    label: 'Llama 3.3 70B',
+    vendor: 'Meta',
+    description: '70B fp8 fast · 高品質',
   },
   {
     id: '@cf/meta/llama-3.1-8b-instruct',
