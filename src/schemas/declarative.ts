@@ -1,22 +1,24 @@
 import { z } from 'zod'
 
+// 注: OpenAI の strict structured output は全プロパティが required である必要があるため、
+// 省略可フィールドは .optional() ではなく .nullable() を使う (Workers AI でも問題なし)
 export const CardSchema = z.object({
   title: z.string(),
-  subtitle: z.string().optional(),
-  body: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-  variant: z.enum(['default', 'highlight']).optional(),
+  subtitle: z.string().nullable(),
+  body: z.string().nullable(),
+  tags: z.array(z.string()).nullable(),
+  variant: z.enum(['default', 'highlight']).nullable(),
 })
 
 export const SectionSchema = z.object({
-  heading: z.string().optional(),
-  description: z.string().optional(),
+  heading: z.string().nullable(),
+  description: z.string().nullable(),
   cards: z.array(CardSchema),
 })
 
 export const DeclarativeUISchema = z.object({
-  title: z.string().optional(),
-  intro: z.string().optional(),
+  title: z.string().nullable(),
+  intro: z.string().nullable(),
   sections: z.array(SectionSchema),
 })
 

@@ -25,6 +25,7 @@ export type Restaurant = {
   address: string | null
   vision_summary?: string | null
   photo_id?: string | null
+  photo_url?: string | null
 }
 
 const colors = {
@@ -38,33 +39,44 @@ const colors = {
 }
 
 export function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {
+  // Dynamic バンドで AI が書いたコードが undefined を渡しても SSR 全体を巻き込まない
+  if (!restaurant) return null
   return (
     <article
       style={{
         background: colors.surface,
         border: `1px solid ${colors.border}`,
         borderRadius: 12,
-        padding: '14px 16px',
+        padding: 0,
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
+        overflow: 'hidden',
         color: colors.text,
         fontFamily:
           "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans', 'Noto Sans JP', sans-serif",
       }}
     >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-          gap: 8,
-        }}
-      >
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>{restaurant.name}</h3>
-        <span style={{ fontSize: 11, color: colors.muted, whiteSpace: 'nowrap' }}>
-          {restaurant.area}
-        </span>
+      {restaurant.photo_url && (
+        <img
+          src={restaurant.photo_url}
+          alt={restaurant.name}
+          loading='lazy'
+          style={{
+            width: '100%',
+            height: 140,
+            objectFit: 'cover',
+            display: 'block',
+            background: colors.surface2,
+          }}
+        />
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '14px 16px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, lineHeight: 1.35, wordBreak: 'break-word' }}>
+          {restaurant.name}
+        </h3>
+        <span style={{ fontSize: 11, color: colors.muted }}>{restaurant.area}</span>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         <span
@@ -120,11 +132,41 @@ export function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {
       {restaurant.address && (
         <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>{restaurant.address}</div>
       )}
+      </div>
     </article>
   )
 }
 
+/** 検索中に出すスケルトン (記事いわく「ないと不安」レベルの体験差) */
+export function RestaurantListSkeleton({ count = 4 }: { count?: number }) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(min(260px, 100%), 1fr))',
+        gap: 12,
+      }}
+    >
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          style={{
+            height: 168,
+            borderRadius: 12,
+            background: `linear-gradient(90deg, ${colors.surface2} 25%, ${colors.surface} 50%, ${colors.surface2} 75%)`,
+            backgroundSize: '200% 100%',
+            border: `1px solid ${colors.border}`,
+            animation: 'rc-shimmer 1.2s infinite',
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
 export function RestaurantList({ restaurants }: { restaurants: Restaurant[] }) {
+  // AI が書いたコードが null/undefined 混じりの配列を渡しても落ちないように
+  restaurants = (restaurants ?? []).filter(Boolean)
   if (restaurants.length === 0) {
     return (
       <div style={{ color: colors.muted, fontSize: 13, padding: 12 }}>
@@ -136,7 +178,7 @@ export function RestaurantList({ restaurants }: { restaurants: Restaurant[] }) {
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(min(260px, 100%), 1fr))',
         gap: 12,
       }}
     >

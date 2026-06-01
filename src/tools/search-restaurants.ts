@@ -6,6 +6,7 @@ import {
   type DbRestaurantRow,
   type Restaurant,
 } from '../types'
+import { searchPlaces } from './places'
 
 export const SearchInputSchema = z.object({
   query: z.string().optional().describe('自由文クエリ。曖昧な気分の表現も可'),
@@ -61,13 +62,33 @@ export async function searchRestaurants(db: D1Database, input: SearchInput): Pro
   return results.map(rowToRestaurant)
 }
 
-export function makeSearchRestaurantsTool(db: D1Database) {
+/**
+ * データソースの解決層。
+ * GOOGLE_MAPS_API_KEY があれば Google Places (New) を優先し、キーが無い・
+ * エラー・0 件のときは D1 シードへフォールバックする (会場でキー切れでも動く保険)。
+ */
+export async function findRestaurants(
+  env: CloudflareBindings,
+  input: SearchInput
+): Promise<Restaurant[]> {
+  if (env.GOOGLE_MAPS_API_KEY) {
+    try {
+      const places = await searchPlaces(env.GOOGLE_MAPS_API_KEY, input)
+      if (places.length > 0) return places
+    } catch (err) {
+      console.error('Places API failed, falling back to D1:', err)
+    }
+  }
+  return searchRestaurants(env.DB, input)
+}
+
+export function makeSearchRestaurantsTool(env: CloudflareBindings) {
   return tool({
     description:
-      'D1 に保存されたレストランから条件にマッチするお店を検索する。エリア・ジャンル・雰囲気で絞り込みできる。',
+      'レストランを条件で検索する (Google Places / D1)。エリア・ジャンル・雰囲気で絞り込みできる。',
     inputSchema: SearchInputSchema,
     execute: async (input) => {
-      const restaurants = await searchRestaurants(db, input)
+      const restaurants = await findRestaurants(env, input)
       return { restaurants }
     },
   })

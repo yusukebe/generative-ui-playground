@@ -1,0 +1,44 @@
+import { z } from 'zod'
+
+// 抽出するプラン条件 (intake で埋める)
+export type PlanParams = {
+  date: string // YYYY-MM-DD
+  dateLabel: string // 「来週の月曜 (6/8)」など人間向け表記
+  area: string
+  partySize: number
+  purpose: string // デート / 接待 / 友人 / 一人 など
+  mood: string // 静か / 賑やか など (空でも可)
+}
+
+// intake: 1行入力から条件を抽出。足りなければ ready=false + question を返す
+// (OpenAI strict 対応のため省略可は nullable)
+export const IntakeSchema = z.object({
+  ready: z.boolean().describe('日付・エリア・人数が揃っていれば true'),
+  question: z.string().nullable().describe('ready=false のとき、不足を埋める短い質問を1つ'),
+  date: z.string().nullable().describe('YYYY-MM-DD。今日の日付を基準に「来週の月曜」等を解決'),
+  dateLabel: z.string().nullable().describe('人間向けの日付表記 (例: 来週の月曜 (6/8))'),
+  area: z.string().nullable().describe('エリア (関内 / 中華街 / 野毛 / みなとみらい 等)'),
+  partySize: z.number().nullable().describe('人数'),
+  purpose: z.string().nullable().describe('用途 (デート / 接待 / 友人 / 一人 など)'),
+  mood: z.string().nullable().describe('気分 (静か / 賑やか など。無ければ null)'),
+})
+
+export type IntakeResult = z.infer<typeof IntakeSchema>
+
+// Controlled バンド: 既製の「プラン」テンプレートに AI が値を流し込む
+export const PlanSchema = z.object({
+  title: z.string().describe('プランのタイトル'),
+  weatherNote: z.string().describe('天気をふまえた一言 (例: 雨予報なので屋内中心に)'),
+  steps: z
+    .array(
+      z.object({
+        label: z.string().describe('1軒目 / 2軒目 / 〆 など'),
+        restaurantId: z.string().describe('restaurants の id'),
+        why: z.string().describe('その店を選んだ理由 (一言)'),
+      })
+    )
+    .describe('時系列のプラン (店をはしご)'),
+  tip: z.string().nullable().describe('予約・移動などのメモ'),
+})
+
+export type Plan = z.infer<typeof PlanSchema>

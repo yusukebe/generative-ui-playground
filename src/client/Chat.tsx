@@ -1,4 +1,5 @@
 import { useAgentChat } from '@cloudflare/ai-chat/react'
+import { Button } from '@cloudflare/kumo/components/button'
 import { useAgent } from 'agents/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Streamdown } from 'streamdown'
@@ -6,15 +7,16 @@ import type { RestaurantAgent } from '../agent'
 import { DEFAULT_MODE, type Mode } from '../modes'
 import { DEFAULT_MODEL, type ModelId } from '../models'
 import type { DeclarativeUI } from '../schemas/declarative'
-import { RestaurantList, type Restaurant } from '../ui-components'
+import { RestaurantList, RestaurantListSkeleton, type Restaurant } from '../ui-components'
 import { ModelSelector } from './ModelSelector'
 import { ModeSelector } from './ModeSelector'
+import { ViewTabs, type View } from './ViewTabs'
 import { DeclarativeView } from './modes/DeclarativeView'
 import { OpenEndedView } from './modes/OpenEndedView'
 
 type AgentSyncState = { model: ModelId; mode: Mode }
 
-export function Chat() {
+export function Chat({ view, onViewChange }: { view: View; onViewChange: (v: View) => void }) {
   const [mode, setMode] = useState<Mode>(DEFAULT_MODE)
   const [model, setModel] = useState<ModelId>(DEFAULT_MODEL)
 
@@ -92,17 +94,19 @@ export function Chat() {
     <div className='chat'>
       <header className='chat__header'>
         <span className='chat__title'>レストラン提案</span>
+        <ViewTabs value={view} onChange={onViewChange} />
         <ModeSelector value={mode} onChange={handleModeChange} />
         <div className='chat__header-right'>
           <ModelSelector value={model} onChange={handleModelChange} />
-          <button
+          <Button
             type='button'
-            className='chat__clear'
+            variant='ghost'
+            size='sm'
             onClick={() => clearHistory()}
             title='会話履歴をクリア'
           >
             Clear
-          </button>
+          </Button>
           <span className='chat__status' data-status={statusText}>
             {statusText}
           </span>
@@ -120,10 +124,11 @@ export function Chat() {
                 '桜木町でクラフトビール',
                 'みなとみらいでデート',
               ].map((q) => (
-                <button
+                <Button
                   key={q}
                   type='button'
-                  className='chat__sample'
+                  variant='outline'
+                  size='sm'
                   onClick={() => {
                     if (isBusy) return
                     sendMessage({ text: q })
@@ -131,7 +136,7 @@ export function Chat() {
                   disabled={isBusy}
                 >
                   {q}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -175,9 +180,9 @@ export function Chat() {
             autoCorrect='off'
             spellCheck={false}
           />
-          <button type='submit' className='chat__send' disabled={isBusy || !input.trim()}>
-            {isBusy ? '応答中…' : '送信'}
-          </button>
+          <Button type='submit' variant='primary' loading={isBusy} disabled={!input.trim()}>
+            送信
+          </Button>
         </div>
       </form>
     </div>
@@ -256,7 +261,7 @@ function DynamicRenderView({ part }: { part: ToolPart }) {
     <div className='codemode'>
       {code && (
         <details className='codemode__code' open>
-          <summary>🧠 Agent が書いた Worker module (TSX)</summary>
+          <summary>🧠 Agent が書いた APP コンポーネント (TSX)</summary>
           <pre>
             <code>{code}</code>
           </pre>
@@ -296,6 +301,18 @@ function PartView({ part, hideSearchOutput }: { part: MessagePart; hideSearchOut
       // search_restaurants の "実行中" 表示は Declarative/Open-Ended/Dynamic では隠す
       // (短時間で終わるノイズなため)
       if (toolName === 'search_restaurants' && hideSearchOutput) return null
+      // Controlled: 検索中はスケルトンを出す (テキスト→スケルトン→実カード の体験)
+      if (toolName === 'search_restaurants') {
+        return (
+          <div className='tool-skeleton'>
+            <div className='tool-progress'>
+              <span className='tool-progress__icon'>🔎</span>
+              <span>お店を検索中…</span>
+            </div>
+            <RestaurantListSkeleton />
+          </div>
+        )
+      }
       return (
         <div className='tool-progress'>
           <span className='tool-progress__icon'>⚙️</span>

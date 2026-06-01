@@ -10,6 +10,7 @@ export type Restaurant = {
   note: string | null
   vision_summary: string | null
   photo_id: string | null
+  photo_url?: string | null
   price_range: string | null
   atmosphere: string | null
   created_at: number

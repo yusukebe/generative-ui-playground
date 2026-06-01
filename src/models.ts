@@ -1,6 +1,9 @@
+export type ModelProvider = 'workers-ai' | 'openai'
+
 export type ModelId =
+  | 'openai:gpt-4o-mini'
+  | 'openai:gpt-4o'
   | '@cf/openai/gpt-oss-120b'
-  | '@cf/mistralai/mistral-small-3.1-24b-instruct'
   | '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
   | '@cf/meta/llama-4-scout-17b-16e-instruct'
   | '@cf/meta/llama-3.1-8b-instruct'
@@ -12,50 +15,65 @@ export type ModelInfo = {
   label: string
   vendor: string
   description: string
+  provider: ModelProvider
 }
 
 export const MODELS: ModelInfo[] = [
   {
-    id: '@cf/openai/gpt-oss-120b',
-    label: 'GPT-OSS 120B',
+    id: 'openai:gpt-4o-mini',
+    label: 'GPT-4o mini',
     vendor: 'OpenAI',
-    description: '120B · agentic / tool calling 安定',
+    description: '速くて安定 · tool calling / 日本語◎',
+    provider: 'openai',
   },
   {
-    id: '@cf/mistralai/mistral-small-3.1-24b-instruct',
-    label: 'Mistral Small 3.1',
-    vendor: 'Mistral AI',
-    description: '24B · 多言語 + function calling',
+    id: 'openai:gpt-4o',
+    label: 'GPT-4o',
+    vendor: 'OpenAI',
+    description: '高品質 · tool calling / 日本語◎',
+    provider: 'openai',
+  },
+  {
+    id: '@cf/openai/gpt-oss-120b',
+    label: 'GPT-OSS 120B',
+    vendor: 'OpenAI (Workers AI)',
+    description: '120B · Cloudflare 完結',
+    provider: 'workers-ai',
   },
   {
     id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
     label: 'Llama 3.3 70B',
-    vendor: 'Meta',
-    description: '70B fp8 fast · 高品質',
+    vendor: 'Meta (Workers AI)',
+    description: '70B fp8 fast',
+    provider: 'workers-ai',
   },
   {
     id: '@cf/meta/llama-4-scout-17b-16e-instruct',
     label: 'Llama 4 Scout',
-    vendor: 'Meta',
-    description: '17B MoE · 万能型で速い',
+    vendor: 'Meta (Workers AI)',
+    description: '17B MoE · 速い',
+    provider: 'workers-ai',
   },
   {
     id: '@cf/meta/llama-3.1-8b-instruct',
     label: 'Llama 3.1 8B',
-    vendor: 'Meta',
-    description: '8B · 軽量・最速',
+    vendor: 'Meta (Workers AI)',
+    description: '8B · 軽量',
+    provider: 'workers-ai',
   },
   {
     id: '@cf/google/gemma-3-12b-it',
     label: 'Gemma 3 12B',
-    vendor: 'Google',
+    vendor: 'Google (Workers AI)',
     description: '12B · 多言語',
+    provider: 'workers-ai',
   },
   {
     id: '@cf/qwen/qwen2.5-coder-32b-instruct',
     label: 'Qwen 2.5 Coder',
-    vendor: 'Alibaba',
+    vendor: 'Alibaba (Workers AI)',
     description: '32B · コード寄り',
+    provider: 'workers-ai',
   },
 ]
 

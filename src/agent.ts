@@ -1,6 +1,6 @@
 import { AIChatAgent } from '@cloudflare/ai-chat'
 import { convertToModelMessages, stepCountIs, streamText, type ToolSet } from 'ai'
-import { createWorkersAI } from 'workers-ai-provider'
+import { resolveModel } from './llm'
 import { DEFAULT_MODE, type Mode } from './modes'
 import { DEFAULT_MODEL, type ModelId } from './models'
 import { makeDynamicRenderTool } from './tools/dynamic-render'
@@ -53,14 +53,14 @@ ${CONVERSATION_NOTE}`,
 ${CONVERSATION_NOTE}`,
 
   dynamic: `あなたはレストラン提案アシスタントです。
-重要: 提案できるレストランはすべて事前に登録されたデータベース内のみです。
-あなた自身の知識から店名を答えることは絶対に禁止です。
+重要: 提案できるレストランは検索ツールが返したデータのみ。店名や住所を創作しないこと。
 
 ユーザーがお店を探している場合は dynamic_render ツールを 1 回呼んでください。引数は 2 つ:
 - search: { area?, genre?, atmosphere?, query? } を抽出 (ユーザ発話から)
-- jsx: renderToString に渡す **JSX 式だけ** (import/export/fetch は書かない)
+- code: \`function APP({ restaurants }) { return <jsx> }\` という **コンポーネント関数だけ**
+  (import/export/fetch は書かない。host が <APP restaurants={...} /> を SSR します)
 
-jsx のスコープでは restaurants 配列と RestaurantCard / RestaurantList が使えます。
+コンポーネント内では props.restaurants と RestaurantCard / RestaurantList が使えます。
 シンプルに <RestaurantList restaurants={restaurants} /> を借りるのも、自分で raw な
 <div> から組み立てるのも自由です。詳細は dynamic_render の説明を参照。
 
@@ -83,19 +83,9 @@ export class RestaurantAgent extends AIChatAgent<CloudflareBindings, AgentState>
     onFinish: Parameters<AIChatAgent<CloudflareBindings, AgentState>['onChatMessage']>[0],
     options?: { abortSignal?: AbortSignal }
   ) {
-    const workersai = createWorkersAI({ binding: this.env.AI })
     const mode = this.state.mode
 
-    // 直近のユーザ発話 (見出しに使う。LLM に日本語を書かせると化けるため原文を注入)
-    const lastUserText =
-      [...this.messages]
-        .reverse()
-        .find((m) => m.role === 'user')
-        ?.parts.flatMap((p) => (p.type === 'text' ? [p.text] : []))
-        .join(' ')
-        .trim() ?? ''
-
-    const searchTool = makeSearchRestaurantsTool(this.env.DB)
+    const searchTool = makeSearchRestaurantsTool(this.env)
     let tools: ToolSet
     if (mode === 'controlled') {
       tools = { search_restaurants: searchTool }
@@ -104,27 +94,31 @@ export class RestaurantAgent extends AIChatAgent<CloudflareBindings, AgentState>
     } else if (mode === 'open-ended') {
       tools = { search_restaurants: searchTool, render_html: renderHTMLTool }
     } else {
-      // dynamic: LLM は JSX 式だけ書く。見出し用に原文 title を注入
-      tools = { dynamic_render: makeDynamicRenderTool(this.env, lastUserText) }
+      // dynamic: LLM は APP コンポーネント関数だけ書く
+      tools = { dynamic_render: makeDynamicRenderTool(this.env) }
     }
 
     // Dynamic / Open-Ended は長いコード/HTML を吐く。さらに gpt-oss 等の
     // reasoning モデルは推論トークンを消費するので、大きめの上限を取る
     const maxTokens = mode === 'controlled' ? 8192 : 32000
+    const { model, isOpenAI } = resolveModel(this.env, this.state.model)
 
     const result = streamText({
-      model: workersai(this.state.model),
+      model,
       system: PROMPTS[mode],
       messages: await convertToModelMessages(this.messages),
       tools,
       stopWhen: stepCountIs(5),
-      providerOptions: {
-        'workers-ai': {
-          max_tokens: maxTokens,
-          // gpt-oss は reasoning model。推論を軽くして本体出力にトークンを回す
-          reasoning_effort: 'low',
-        },
-      },
+      maxOutputTokens: maxTokens,
+      providerOptions: isOpenAI
+        ? {}
+        : {
+            'workers-ai': {
+              max_tokens: maxTokens,
+              // gpt-oss は reasoning model。推論を軽くして本体出力にトークンを回す
+              reasoning_effort: 'low',
+            },
+          },
       abortSignal: options?.abortSignal,
       onFinish,
     })
