@@ -4,7 +4,6 @@ import { runIntake, streamBand, type Band } from './compare'
 import { DEFAULT_MODEL, type ModelId } from './models'
 import type { PlanParams } from './schemas/plan'
 import { renderDynamicComponentStream } from './tools/dynamic-render'
-import { findRestaurants } from './tools/search-restaurants'
 
 export { RestaurantAgent } from './agent'
 
@@ -53,23 +52,14 @@ app.post('/api/band', async (c) => {
   return streamBand(c.env, band, params, model ?? DEFAULT_MODEL)
 })
 
-// Dynamic バンドの Suspense ストリーミング SSR フレーム (iframe が fetch して使う)
+// Dynamic バンドの Suspense ストリーミング SSR フレーム (iframe が fetch して使う)。
+// code と お店データ(restaurants) は POST で受け取る。お店検索は streamBand 側がコード生成と
+// 並行で済ませて渡してくるので、ここでは検索しない (天気/〆ラーメンは worker が描画時に取得)。
 const PHOTO_NAME = /^places\/[A-Za-z0-9_-]+\/photos\/[A-Za-z0-9_-]+$/
-app.get('/api/dynamic-frame', async (c) => {
-  const q = c.req.query('q') ?? ''
-  const area = c.req.query('area') ?? ''
-  const codeB64 = c.req.query('code') ?? ''
-  if (!codeB64 || (!q && !area)) return c.notFound()
-  let code: string
-  try {
-    const bin = atob(codeB64.replace(/-/g, '+').replace(/_/g, '/'))
-    code = new TextDecoder().decode(Uint8Array.from(bin, (ch) => ch.charCodeAt(0)))
-  } catch {
-    return c.notFound()
-  }
-  // お店(Places=要キー)だけホストが取得して渡す。天気/〆ラーメン(キー不要)は worker が描画時に取得。
-  const izakaya = await findRestaurants(c.env, { area, query: q, limit: 2 })
-  const { stream } = await renderDynamicComponentStream(c.env, code, izakaya)
+app.post('/api/dynamic-frame', async (c) => {
+  const { code, restaurants } = await c.req.json<{ code?: string; restaurants?: unknown[] }>()
+  if (!code) return c.json({ error: 'code required' }, 400)
+  const { stream } = await renderDynamicComponentStream(c.env, code, restaurants ?? [])
   return new Response(stream, {
     headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
   })

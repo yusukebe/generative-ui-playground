@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
-// url(=AIのコード) 単位で SSR 済み HTML をキャッシュ。タブを切り替えて戻っても
-// 再 fetch / 再 SSR せず、描画済みのものをそのまま見せる (リロードは新しい url で来る)。
+// code(=AIのコード) 単位で SSR 済み HTML をキャッシュ。タブを切り替えて戻っても
+// 再 fetch / 再 SSR せず、描画済みのものをそのまま見せる (リロードは新しい code で来る)。
 const frameHtmlCache = new Map<string, string>()
 
 /**
@@ -11,9 +11,15 @@ const frameHtmlCache = new Map<string, string>()
  * パース → Suspense 境界が解決するたびにカードが現れる ($RC reveal)。
  * iframe は中身の高さに自動フィット (same-origin なので body.scrollHeight で測れる)。
  */
-export function StreamFrame({ url }: { url: string }) {
+export function StreamFrame({
+  code,
+  restaurants,
+}: {
+  code: string
+  restaurants: unknown[]
+}) {
   const ref = useRef<HTMLIFrameElement>(null)
-  // 最初のチャンクが来るまで(お店検索+Worker起動の数秒)白画面になるのを防ぐローディング
+  // 最初のチャンクが来るまで(Worker起動の数秒)白画面になるのを防ぐローディング
   const [pending, setPending] = useState(true)
   useEffect(() => {
     const iframe = ref.current
@@ -44,7 +50,7 @@ export function StreamFrame({ url }: { url: string }) {
       setTimeout(fit, 1500)
     }
     // 既に SSR 済み(タブ切替で戻ってきた等) ならキャッシュを書くだけ。再 fetch しない
-    const cached = frameHtmlCache.get(url)
+    const cached = frameHtmlCache.get(code)
     if (cached) {
       const doc = iframe.contentDocument
       if (doc) {
@@ -57,7 +63,11 @@ export function StreamFrame({ url }: { url: string }) {
       }
     } else {
       ;(async () => {
-        const res = await fetch(url)
+        const res = await fetch('/api/dynamic-frame', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ code, restaurants }),
+        })
         if (cancelled || !res.body) return
         const doc = iframe.contentDocument
         if (!doc) return
@@ -80,7 +90,7 @@ export function StreamFrame({ url }: { url: string }) {
           doc.write(chunk)
           fit()
         }
-        frameHtmlCache.set(url, full) // 完了した HTML をキャッシュ (再マウントで再利用)
+        frameHtmlCache.set(code, full) // 完了した HTML をキャッシュ (再マウントで再利用)
         observeBody()
       })().catch(() => {})
     }
@@ -89,7 +99,7 @@ export function StreamFrame({ url }: { url: string }) {
       clearInterval(timer)
       ro?.disconnect()
     }
-  }, [url])
+  }, [code, restaurants])
 
   return (
     <div className='band-frame-wrap'>

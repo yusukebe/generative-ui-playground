@@ -28,8 +28,9 @@ type BandResults = {
   controlled: Plan | null
   declarative: DeclarativeUI | null
   openEnded: string | null
-  dynamicFrameUrl: string | null
   dynamicCode: string
+  dynamicReady: boolean // code とお店データが揃いフレーム描画可能
+  dynamicRestaurants: Restaurant[]
   status: Record<Band, Status>
   metrics: Partial<Record<Band, Metric>>
   ttfr: Partial<Record<Band, number>> // 初描画までの ms (最初の可視コンテンツ)
@@ -39,8 +40,9 @@ const EMPTY_RESULTS: BandResults = {
   controlled: null,
   declarative: null,
   openEnded: null,
-  dynamicFrameUrl: null,
   dynamicCode: '',
+  dynamicReady: false,
+  dynamicRestaurants: [],
   status: { controlled: 'idle', declarative: 'idle', 'open-ended': 'idle', dynamic: 'idle' },
   metrics: {},
   ttfr: {},
@@ -180,7 +182,7 @@ export function Compare() {
       ...(b === 'controlled' && { controlled: null }),
       ...(b === 'declarative' && { declarative: null }),
       ...(b === 'open-ended' && { openEnded: null }),
-      ...(b === 'dynamic' && { dynamicFrameUrl: null, dynamicCode: '' }),
+      ...(b === 'dynamic' && { dynamicCode: '', dynamicReady: false, dynamicRestaurants: [] }),
       status: { ...r.status, [b]: 'streaming' },
       ttfr: { ...r.ttfr, [b]: undefined },
     }))
@@ -272,8 +274,11 @@ export function Compare() {
         case 'dynamic-code':
           s.dynamicCode = (ev.code as string) ?? s.dynamicCode
           break
-        case 'dynamic-frame':
-          s.dynamicFrameUrl = ev.url as string
+        case 'dynamic-ready':
+          // code とお店データが揃った → フレーム(StreamFrame)を描画
+          s.dynamicCode = (ev.code as string) ?? s.dynamicCode
+          s.dynamicRestaurants = (ev.restaurants as Restaurant[]) ?? []
+          s.dynamicReady = true
           markFirst()
           break
         case 'dynamic':
@@ -608,8 +613,8 @@ function BandPanel({
     preview =
       status === 'error' ? (
         <Failed />
-      ) : results.dynamicFrameUrl ? (
-        <StreamFrame url={results.dynamicFrameUrl} />
+      ) : results.dynamicReady ? (
+        <StreamFrame code={results.dynamicCode} restaurants={results.dynamicRestaurants} />
       ) : (
         <Streaming label='AI がコードを書いています… → Worker で SSR' />
       )

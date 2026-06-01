@@ -284,13 +284,6 @@ function planContext(
 
 const COMMON = `重要: 店名・住所は候補データの値だけを使い創作しない。日本語で。雨/寒いなど天気をプランに反映する。`
 
-function b64urlEncode(s: string): string {
-  const bytes = new TextEncoder().encode(s)
-  let bin = ''
-  for (const b of bytes) bin += String.fromCharCode(b)
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
 function stripFence(text: string): string {
   const fence = text.match(/```[^\n]*\n([\s\S]*?)```/)
   return (fence ? fence[1] : text).trim()
@@ -403,8 +396,10 @@ ${ctxPhotos}`,
           send({ type: 'open-ended', html })
           metric(await usage, html)
         } else {
-          // Dynamic は事前収集しない。restaurants(お店) のみ描画時に host が prop で渡す
-          // (Places=要キー)。天気/〆ラーメンはキー不要なので worker のコンポーネントが描画時に取得。
+          // Dynamic: お店(Places=要キー)だけ host が用意し prop で渡す。天気/〆ラーメンは worker が描画時取得。
+          // ★ コード生成と「同時に」お店検索を開始する (await せず Promise を持っておく)。
+          const dq = [params.craving, params.purpose, params.mood].filter(Boolean).join(' ')
+          const izakayaPromise = findRestaurants(env, { area: params.area, query: dq, limit: 2 })
           const dynCtx = `条件: ${params.dateLabel}(${params.date}) / ${params.area} / ${params.partySize}人 / 用途:${params.purpose} / 気分:${params.mood || '指定なし'}
 ※ restaurants(お店) は描画時に props で渡されます。データは埋め込まず props を使うこと。`
           const { textStream, text, usage } = streamText({
@@ -462,11 +457,10 @@ ${dynCtx}`,
           for await (const delta of textStream) send({ type: 'dynamic-delta', delta })
           const code = stripFence(await text)
           send({ type: 'dynamic-code', code })
-          const q = [params.craving, params.purpose, params.mood].filter(Boolean).join(' ')
-          const url = `/api/dynamic-frame?area=${encodeURIComponent(params.area)}&q=${encodeURIComponent(q)}&code=${b64urlEncode(code)}`
-          send({ type: 'dynamic-frame', url, code })
+          // コード生成と並行で走らせていたお店検索を回収して一緒に渡す (フレームは検索しない)
+          const izakaya = await izakayaPromise
+          send({ type: 'dynamic-ready', code, restaurants: izakaya })
           metric(await usage, code)
-          send({ type: 'dynamic', code })
         }
       } catch (e) {
         console.error(`[plan] ${band} failed:`, e)
