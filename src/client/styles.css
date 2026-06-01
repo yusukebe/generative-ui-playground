@@ -240,7 +240,8 @@ body,
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-width: 720px;
+  max-width: 920px;
+  width: 100%;
 }
 .message[data-role='user'] {
   align-self: flex-end;
@@ -350,9 +351,13 @@ body,
   font-size: 12px;
   line-height: 1.5;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  overflow-x: auto;
+  overflow: auto;
+  max-height: 320px;
   white-space: pre;
   color: var(--text);
+}
+.codemode__code pre code {
+  display: block;
 }
 
 .mode-selector {
@@ -610,6 +615,7 @@ body,
 .open-ended {
   width: 100%;
   min-height: 480px;
+  max-height: 720px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: white;
