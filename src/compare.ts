@@ -1,5 +1,5 @@
 /**
- * 飲み会アドバイザー (パターン比較)。
+ * ご飯アドバイザー (パターン比較)。
  * 1 行入力 → intake(条件抽出/不足なら質問) → 天気+店検索 → 4 バンドで「プラン」を描き分け。
  * 1 タスクでやることが多い (日付/天気/検索/複数パート) ので、ストリーミングの差が見える。
  *
@@ -166,7 +166,7 @@ async function gatherWithTools(
       },
     }),
     search_restaurants: tool({
-      description: '飲み会向けのお店をエリア・気分で検索する (Google Places / D1)。1回だけ呼ぶ。',
+      description: 'ご飯向けのお店をエリア・気分で検索する (Google Places / D1)。1回だけ呼ぶ。',
       inputSchema: SearchInputSchema,
       execute: async (input) => {
         if (gotIzakaya) return { restaurants: izakaya.map((r) => ({ id: r.id, name: r.name })) }
@@ -198,7 +198,7 @@ async function gatherWithTools(
       tools,
       stopWhen: stepCountIs(8),
       providerOptions,
-      prompt: `あなたは横浜の飲み会プランに必要なデータを集めるエージェントです。
+      prompt: `あなたは横浜のご飯プランに必要なデータを集めるエージェントです。
 以下の条件に対し、4つのツールを**すべて**呼んで情報を集めてください (順不同・並行で構いません)。
 - get_weather(date="${params.date}")
 - get_last_train(area="${params.area}")

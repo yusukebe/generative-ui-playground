@@ -338,7 +338,7 @@ export function Compare() {
   return (
     <div className='advisor'>
       <header className='advisor__header'>
-        <span className='chat__title'>飲み会アドバイザー 🍻</span>
+        <span className='chat__title'>ご飯アドバイザー 🍻</span>
         <div className='chat__header-right'>
           <ModelSelector value={model} onChange={setModel} />
           <Button
