@@ -231,7 +231,9 @@ export function useRamenShop(id) {
   let e = _cache.get(shopId)
   if (!e) {
     e = { done: false, data: null }
-    e.promise = fetch('https://ramen-api.dev/shops/' + shopId)
+    // デモで Suspense が見えるよう少し待つ (〆ラーメンは天気より後に出す=時間差ストリーミング)
+    e.promise = new Promise((res) => setTimeout(res, 1400))
+      .then(() => fetch('https://ramen-api.dev/shops/' + shopId))
       .then((r) => r.json())
       .then((d) => {
         const s = d && d.shop
@@ -250,13 +252,15 @@ export function useRamenShop(id) {
   return e.data
 }
 
-// ローディング用スケルトン
+// ローディング用スケルトン (Suspense 保留中だと分かるようラベルを出す)
 export function CardSkeleton() {
   return <div style={{
     height: 168, borderRadius: 12, border: '1px solid #dce0e8',
     background: 'linear-gradient(90deg, #eef0f4 25%, #ffffff 50%, #eef0f4 75%)',
     backgroundSize: '200% 100%', animation: 'rc-shimmer 1.2s infinite',
-  }} />
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    color: '#6b7280', fontSize: 13, fontWeight: 600,
+  }}>⏳ 取得中… (Suspense)</div>
 }
 
 // 〆ラーメンの葉 (居酒屋カードとは別UI・ラーメン専用)。id を渡すと useRamenShop で
@@ -284,7 +288,9 @@ export function useWeather(date) {
   let e = _wcache.get(date)
   if (!e) {
     e = { done: false, data: null }
-    e.promise = fetch('https://api.open-meteo.com/v1/forecast?latitude=35.4437&longitude=139.638&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FTokyo&forecast_days=16')
+    // デモで Suspense が見えるよう少し待つ (天気は先に出す)
+    e.promise = new Promise((res) => setTimeout(res, 700))
+      .then(() => fetch('https://api.open-meteo.com/v1/forecast?latitude=35.4437&longitude=139.638&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FTokyo&forecast_days=16'))
       .then((r) => r.json())
       .then((d) => {
         const days = (d.daily && d.daily.time) || []
