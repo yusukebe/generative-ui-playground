@@ -83,17 +83,16 @@ Dynamic は Open-Ended の延長線上だが、LLM が**コードを書く** こ
 
 つまり「**Code Mode + Dynamic Worker = LLM SSR の実装基盤**」と一発で説明できる。Spectrum 議論はこの上に乗る枝葉、というフレームも成立する。
 
-## 中核アイデア (2026-05-31 大改修後)
+## 中核アイデア (2026-06-01 再構成後)
 
-**LLM がコードを書く → Dynamic Worker で実行 → Response を返す**、を主軸とした **Code Mode + React** の単一プラットフォーム上で、LLM が状況に応じて Spectrum 上を歩く。
+**4 バンド構成**: Controlled / Declarative / Open-Ended (古典的 3 バンド) に加えて、**第 4 のバンド「Dynamic」** を提案する位置付け。
 
-ハードな ModeSelector は撤去した。LLM のコード次第で:
+- 古典 3 バンドは echo-back ツール (`render_ui` / `render_html`) または直叩き tool で実装、シンプル
+- **Dynamic は Code Mode + Dynamic Worker + JSX + React** で実装。LLM が書く SSR の実装基盤
+- ModeSelector で 4 つを切り替え可能 (ステージで「同じ質問を 4 モードで投げて比較」できる)
+- Dynamic は内側で更にグラデーションあり: `<RestaurantList />` を借りる ↔ raw な `<div>` で凝る
 
-- `<RestaurantList restaurants={...} />` を 1 個借りる → Controlled 寄り
-- Section / Card ツリーで `gui-tree+json` を返す → Declarative 寄り
-- 自分で raw な JSX で凝る → Open-Ended 寄り
-
-**Spectrum はモードではなく LLM の選択**、というのが最終的な主張。
+> 2026-05-31 に一度 ModeSelector 撤去 + Code Mode 一本化を試したが、登壇演出 (「**実は 4 つ目を考えました！**」) の都合で 4 バンド共存に再構成した (2026-06-01)。
 
 ### 共有 UI コンポーネント
 
@@ -128,7 +127,7 @@ Dynamic は Open-Ended の延長線上だが、LLM が**コードを書く** こ
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Cloudflare 完結** (Vercel/Next.js を使わない)         | 登壇者が Hono 作者。Cloudflare 主軸でデモを組みたい                                                                                                                       |
 | **Code Mode + React を全モードで使う**                  | LLM が同じ仕組みで Spectrum を歩けるようにするため                                                                                                                        |
-| **ModeSelector 撤去**                                   | コンポーネント借用と raw 自由度のグラデーションを LLM に任せた方が「LLM の選択としての Spectrum」が伝わる                                                                 |
+| **4 バンドを ModeSelector で切替可能に**                | 登壇演出「実は 4 つ目を考えました」のため。Dynamic を第 4 のバンドとして他 3 つと並べて見せる                                                                             |
 | **Content-Type で UI 描画を分岐**                       | 擬似 Response `{ contentType, body }` の Content-Type を見て RestaurantList / DeclarativeView / iframe を切り替え                                                         |
 | **共有コンポーネントを worker-bundler で inject**       | LLM が JSX で `<RestaurantList />` を借りられる = Spectrum の「Controlled 端」を表現できる                                                                                |
 | **sucrase で JSX → React.createElement**                | DynamicWorkerExecutor が arrow function を期待しているため、ESM モジュール bundle 前提の `jsx: 'automatic'` は不可。classic transform で素直に React.createElement を吐く |
