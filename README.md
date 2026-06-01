@@ -1,38 +1,45 @@
 # Generative UI Playground
 
-CopilotKit が提唱する [**Generative UI Spectrum**](https://www.copilotkit.ai/generative-ui-spectrum) (Controlled / Declarative / Open-Ended) を、**Code Mode + Dynamic Worker + React** という一つのプラットフォーム上で **LLM 自身がスペクトラム上を歩く**形で見せるデモ。
+CopilotKit が提唱する [**Generative UI Spectrum**](https://www.copilotkit.ai/generative-ui-spectrum) (Controlled / Declarative / Open-Ended) の 3 バンドを実演しつつ、本デモが提案する **第 4 のバンド「Dynamic」** (Code Mode + Dynamic Worker + JSX SSR) も見せるレストラン提案アプリ。
 
 2026-06-06 [frontend-phpcon-do-2026](https://fortee.jp/frontend-phpcon-do-2026/proposal/3435cc2a-90b6-4f28-8394-1d0665001020) トーク「AI 時代の UI はどこへ行く？その 2！」用。
 
-## 主要な仕掛け
+## 4 つのバンド
 
-| 要素                   | 中身                                                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| **Code Mode**          | LLM は唯一のツール `codemode` に **JSX を含む async アロー関数**を渡す                                                   |
-| **Dynamic Worker**     | その関数は Cloudflare Worker Loader で別 Worker サンドボックスに spawn して実行                                          |
-| **React 環境**         | サンドボックスには `react` / `react-dom/server` / `restaurant-ui` (共有 UI コンポーネント) が modules として inject 済み |
-| **Response 返却**      | 関数戻り値は擬似 Response `{ contentType, body }`                                                                        |
-| **Content-Type 分岐**  | クライアントは Content-Type を見て描画方法を切替: `application/json` / `application/vnd.gui-tree+json` / `text/html`     |
-| **コンポーネント借用** | LLM は `<RestaurantList />` を 1 個使うだけでも、raw な `<div>` から組み立てるのも自由                                   |
+| バンド          | LLM 出力                                      | 描画                                                                |
+| --------------- | --------------------------------------------- | ------------------------------------------------------------------- |
+| **Controlled**  | tool call `search_restaurants`                | 事前定義 React コンポーネント (`RestaurantList`) で dispatch        |
+| **Declarative** | tool call `render_ui` (JSON UI ツリー)        | プリミティブ語彙 (Section / Card) を再帰描画                        |
+| **Open-Ended**  | tool call `render_html` (HTML 文字列)         | `<iframe sandbox>` + CSP で実行                                     |
+| **Dynamic** ✨  | tool call `codemode` (**JSX で動的にコード**) | **Cloudflare Dynamic Worker で SSR**、`<RestaurantList />` も借用可 |
 
-並走サブテーマ: **「フォーム UI は消える」** — レストラン登録は専用フォームではなく、チャット入力 + 写真 DnD で行い、LLM が曖昧な自然言語入力を正規化する。
+並走サブテーマ: **「フォーム UI は消える」** — レストラン登録は専用フォームではなく、チャット入力 + 写真 DnD で行い、LLM が曖昧な自然言語入力を Workers AI Vision で正規化する。
 
-## なぜ ModeSelector を撤去したか
+## 「Dynamic」というクライマックス
 
-最初は ModeSelector で 3 バンドを切り替える設計だったが、**LLM がコードを書く**仕組みに統合した結果、強制スイッチは不要になった:
+```
+通常の SSR (Next.js / Remix):
+  開発者が書いた React コンポーネント → サーバで renderToString → HTML
 
-- ユーザが「シンプルに」と言えば → LLM は `<RestaurantList />` を 1 個借りる (≒ Controlled)
-- 「構造化して」と言えば → `application/vnd.gui-tree+json` で Section / Card ツリーを返す (≒ Declarative)
-- 「凝った見た目で」と言えば → raw JSX で凝って書き、`text/html` で返す (≒ Open-Ended)
+このデモの Dynamic バンド:
+  LLM が書いた React コンポーネント → Dynamic Worker で renderToString → HTML
+            ↑ リクエスト時に動的生成 (JIT)
+```
 
-**Spectrum はモードではなく LLM の選択**として現れる、というのが本デモの主張。
+つまり Dynamic は **「LLM が書く SSR」**。Open-Ended の延長線上だが:
+
+- サンドボックス隔離が標準で付く (Cloudflare Worker Loader)
+- React 環境 (renderToString) が走る
+- 既存コンポーネントを **借用できる** (Spectrum を内側でグラデーションできる)
+
+「Code Mode + Dynamic Worker = LLM SSR の実装基盤」。Spectrum 議論はこの上に乗る枝葉、というフレームでもある。
 
 ## Tech Stack
 
 - Cloudflare Workers + [Hono](https://hono.dev/) + [hono-agents](https://www.npmjs.com/package/hono-agents)
 - React 19 + Vite
 - [Cloudflare Agents SDK](https://developers.cloudflare.com/agents/) (Durable Object として Agent を保持)
-- [@cloudflare/codemode](https://www.npmjs.com/package/@cloudflare/codemode) (LLM が書くコードを Dynamic Worker で実行)
+- [@cloudflare/codemode](https://www.npmjs.com/package/@cloudflare/codemode) (Dynamic バンドの実行基盤)
 - [@cloudflare/worker-bundler](https://www.npmjs.com/package/@cloudflare/worker-bundler) (React + 共有コンポーネントを runtime でバンドル)
 - [sucrase](https://www.npmjs.com/package/sucrase) (LLM 生成コードの JSX → React.createElement トランスパイル)
 - Workers AI (Kimi K2.6 / Llama 4 Scout / Llama 3.3 70B / Llama 3.1 8B / Gemma 3 / Qwen 2.5 Coder)
@@ -65,7 +72,7 @@ bun run deploy            # Cloudflare へデプロイ
 flowchart LR
   B["Browser<br/>React SPA<br/>(src/client/*)"]
   W["Cloudflare Worker<br/>Hono + Agents SDK<br/>(src/index.tsx, src/agent.ts)"]
-  S["Dynamic Worker<br/>(LLM のコードを実行する<br/>隔離サンドボックス)"]
+  S["Dynamic Worker<br/>(Dynamic バンドで<br/>LLM のコードを実行する隔離サンドボックス)"]
   D["Cloudflare Bindings<br/>AI / D1 / R2 / LOADER"]
 
   B <-->|WebSocket| W
@@ -76,37 +83,39 @@ flowchart LR
 
 ## Layer 1 — Browser
 
-`Chat.tsx` は `useAgentChat` フックで Agent と双方向通信し、返ってきたメッセージの `parts` を `PartView` が type で分岐する。`codemode` ツールの結果は `CodeModeView` がさらに **Content-Type で再分岐**して各種 View を選ぶ。
+`Chat.tsx` は `useAgentChat` フックで Agent と双方向通信し、メッセージの `parts` を `PartView` が type で分岐。バンドごとに異なる tool 結果を専用 View に振り分ける。
 
 ```mermaid
 flowchart TB
-  Chat["Chat.tsx<br/>(入力 + DnD)"] --> Hook["useAgentChat<br/>(@cloudflare/ai-chat/react)"]
+  Chat["Chat.tsx<br/>(入力 + DnD + ModeSelector)"] --> Hook["useAgentChat<br/>(@cloudflare/ai-chat/react)"]
   Hook --> PartView["PartView<br/>(message.parts を type で分岐)"]
-  PartView -->|tool-codemode| CMV["CodeModeView<br/>(生成コード表示 + 結果)"]
-  CMV --> RV["ResponseView<br/>(Content-Type で分岐)"]
-  RV -->|application/json| RL["RestaurantList"]
-  RV -->|application/vnd.gui-tree+json| DV["DeclarativeView"]
-  RV -->|text/html| OEV["OpenEndedView<br/>(iframe + CSP)"]
+  PartView -->|tool-search_restaurants| RList["RestaurantList<br/>(Controlled バンド)"]
+  PartView -->|tool-render_ui| DV["DeclarativeView<br/>(Declarative バンド)"]
+  PartView -->|tool-render_html| OEV["OpenEndedView<br/>(Open-Ended バンド, iframe + CSP)"]
+  PartView -->|tool-codemode| CMV["CodeModeView<br/>(Dynamic バンド, 生成コード + SSR 結果)"]
 ```
 
 ## Layer 2 — Worker (Hono + Agent)
 
-`/agents/*` を `agentsMiddleware` が引き受け、Durable Object として動く `RestaurantAgent` に到達する。Agent は `state` (model) と `messages` (会話履歴) を SQLite に永続化し、2 つのエントリポイントを持つ。
+`/agents/*` を `agentsMiddleware` が引き受け、Durable Object として動く `RestaurantAgent` に到達。Agent は `state` (model + mode) と `messages` (会話履歴) を SQLite に永続化、`onChatMessage` でモードに応じた tools を選択。
 
 ```mermaid
 flowchart TB
   Route["/agents/restaurant-agent/default"] --> Mid["agentsMiddleware()<br/>(hono-agents)"]
-  Mid --> Agent["RestaurantAgent<br/>(Durable Object)<br/>state: { model }<br/>messages: 永続化"]
-
-  Agent --> Stream["onChatMessage()<br/>streamText({<br/>　tools: { codemode },<br/>　stopWhen: stepCountIs(5)<br/>})"]
+  Mid --> Agent["RestaurantAgent<br/>(Durable Object)<br/>state: { model, mode }<br/>messages: 永続化"]
+  Agent --> Sw["mode で tools を分岐"]
+  Sw --> Ctl["Controlled<br/>{ search_restaurants }"]
+  Sw --> Dcl["Declarative<br/>{ search_restaurants, render_ui }"]
+  Sw --> Oe["Open-Ended<br/>{ search_restaurants, render_html }"]
+  Sw --> Dy["Dynamic ✨<br/>{ codemode }<br/>(React + Dynamic Worker)"]
   Agent --> Reg["@callable registerRestaurant()<br/>Vision → 正規化 → R2 + D1<br/>→ saveMessages"]
 ```
 
-## Layer 3 — Dynamic Worker サンドボックス
+## Layer 3 — Dynamic Worker サンドボックス (Dynamic バンドのみ)
 
-`codemode` ツールの実行時、`@cloudflare/codemode` の `DynamicWorkerExecutor` が `env.LOADER` を使って **隔離 Worker をスピンアップ**し、LLM が書いたコードをそこで走らせる。
+`codemode` ツール実行時、`@cloudflare/codemode` の `DynamicWorkerExecutor` が `env.LOADER` を使って **隔離 Worker をスピンアップ**し、LLM のコードを走らせる。
 
-サンドボックスには `react` / `react-dom/server` / `restaurant-ui` が **modules として inject 済み**で、LLM のコードは `await import('react')` 等で取り出せる。コードは `globalOutbound: null` で外部 fetch を遮断、ホストとの通信は Workers RPC のみ。
+サンドボックスには `react` / `react-dom/server` / `restaurant-ui` (共有コンポーネント) が **modules として inject 済み**で、LLM のコードから `await import('react')` 等で取り出せる。外部 fetch は `globalOutbound: null` で遮断、ホストとの通信は Workers RPC のみ。
 
 ```mermaid
 flowchart LR
@@ -117,7 +126,7 @@ flowchart LR
   CT --> ST["search_restaurants tool<br/>(D1 を叩く)"]
 ```
 
-modules:
+サンドボックス内 modules:
 
 | Key                | 中身                                                           |
 | ------------------ | -------------------------------------------------------------- |
@@ -125,49 +134,63 @@ modules:
 | `react-dom/server` | 同上 (renderToString / renderToStaticMarkup)                   |
 | `restaurant-ui`    | `src/ui-components.tsx` を worker-bundler で TSX → JS バンドル |
 
-## LLM のコードの形
+## 各バンドの LLM 出力例
 
-LLM は `codemode` ツールに以下のような async アロー関数を渡す:
+### Controlled (古典)
 
-```tsx
-// 例 1: 借用全振り (≒ Controlled)
-;async (codemode) => {
-  const { restaurants } = await codemode.search_restaurants({ area: '関内' })
-  return {
-    contentType: 'text/html',
-    body: '<!doctype html>' + renderToString(<RestaurantList restaurants={restaurants} />),
-  }
-}
+LLM は `search_restaurants` を呼ぶだけ。一覧表示はクライアントが自動で行う。
 
-// 例 2: 自分で凝る (≒ Open-Ended)
-;async (codemode) => {
-  const { restaurants } = await codemode.search_restaurants({ area: '関内' })
-  return {
-    contentType: 'text/html',
-    body:
-      '<!doctype html>' +
-      renderToString(
-        <div style={{ background: '#0f1117', color: '#e6e8ee', padding: 24 }}>
-          <h1>関内のおすすめ</h1>
-          {restaurants.map((r) => (
-            <article key={r.id} style={{ padding: 16, background: '#1d2230', borderRadius: 12 }}>
-              <h3>{r.name}</h3>
-              <p>{r.note}</p>
-            </article>
-          ))}
-        </div>
-      ),
-  }
-}
-
-// 例 3: シンプル JSON (≒ Controlled、軽量)
-;async (codemode) => {
-  const { restaurants } = await codemode.search_restaurants({ area: '関内', atmosphere: '静か' })
-  return { contentType: 'application/json', body: JSON.stringify({ restaurants }) }
-}
+```ts
+// LLM が出す tool call
+search_restaurants({ area: '関内', atmosphere: '静か' })
+// → { restaurants: [...] } → クライアントが <RestaurantList /> でレンダ
 ```
 
-`codemode.search_restaurants(...)` の呼び出しは **Workers RPC** でホスト Worker に戻り、本物の `search_restaurants` tool が D1 を叩く。
+### Declarative (古典)
+
+`search_restaurants` の後、`render_ui` で Section / Card のツリーを返す。
+
+```ts
+render_ui({
+  title: '関内のオススメ',
+  sections: [
+    {
+      heading: '雰囲気重視',
+      cards: [
+        {
+          type: 'Card',
+          title: 'BAR Kingdom',
+          subtitle: '関内 / バー',
+          body: '...',
+          tags: ['静か'],
+        },
+      ],
+    },
+  ],
+})
+// → render_ui は echo back、クライアントが DeclarativeView で再帰描画
+```
+
+### Open-Ended (古典)
+
+`render_html` で完全な HTML 文書を返す。
+
+```ts
+render_html({ html: '<!doctype html><html>...</html>' })
+// → クライアントが iframe (allow-scripts + CSP) に流す
+```
+
+### Dynamic ✨ (新)
+
+`codemode` で **JSX を含む async アロー関数**を渡す。Dynamic Worker で SSR して HTML を返す。
+
+```tsx
+;async (codemode) => {
+  const { restaurants } = await codemode.search_restaurants({ area: '関内' })
+  // 既存コンポーネントを借りる (= Controlled 寄り) / 自分で組む (= Open-Ended 寄り) を自由に選べる
+  return renderToString(<RestaurantList restaurants={restaurants} />)
+}
+```
 
 ## 「フォーム UI は消える」登録フロー (Admin 限定)
 
@@ -201,26 +224,29 @@ sequenceDiagram
 ```
 src/
   index.tsx                 Hono Worker entry。/agents/* を hono-agents へ
-  agent.ts                  RestaurantAgent (AIChatAgent + codemode ツール)
+  agent.ts                  RestaurantAgent (4 バンドで tools と prompt を分岐)
+  modes.ts                  Mode 型 (4 バンド) + MODES 一覧
   models.ts                 Model レジストリ (6 モデル, default は Kimi K2.6)
   types.ts                  Restaurant 型 + D1 行 → Restaurant のマッパ
   ui-components.tsx         共有 UI コンポーネント (Chat + Dynamic Worker 両方で使う)
                             ※ インラインスタイル、React のみ依存、self-contained
   schemas/
-    declarative.ts          Section / Card プリミティブの Zod (gui-tree+json 用)
+    declarative.ts          Section / Card プリミティブの Zod
   tools/
-    code-mode-react.ts      JSX 対応の codemode ツール
-                            (sucrase で JSX 変換 + worker-bundler で React 環境用意)
-    search-restaurants.ts   D1 をクエリする AI SDK ツール
+    search-restaurants.ts   D1 検索ツール (全バンド共通)
+    render-ui.ts            render_ui / render_html (echo back ツール)
+    code-mode-react.ts      Dynamic バンド用 codemode ツール
+                            (sucrase で JSX 変換 + worker-bundler で React 環境)
     add-restaurant.ts       Vision + 正規化 + D1 + R2 の登録パイプライン
   client/
     main.tsx                React entry
     App.tsx                 サイドバー + メインペインのレイアウト
-    Chat.tsx                useAgentChat フック + PartView (Content-Type 分岐)
+    Chat.tsx                useAgentChat + PartView (4 種類の tool 結果を分岐)
     ModelSelector.tsx       モデルドロップダウン
+    ModeSelector.tsx        4 バンドのセグメントコントロール
     modes/
-      DeclarativeView.tsx   gui-tree JSON の再帰描画
-      OpenEndedView.tsx     iframe sandbox + CSP のラッパ
+      DeclarativeView.tsx   Declarative バンドの再帰描画
+      OpenEndedView.tsx     Open-Ended / Dynamic バンドの iframe ラッパ
 
 migrations/                 D1 マイグレーション (init + reseed 横浜 18 件)
 wrangler.jsonc              D1 / R2 / Agent (DO) / AI / LOADER バインド
@@ -230,4 +256,4 @@ wrangler.jsonc              D1 / R2 / Agent (DO) / AI / LOADER バインド
 
 dev サーバを `bun run dev` で立ち上げ、Chrome DevTools MCP もしくは普通の DevTools でネットワーク / コンソールを確認。
 
-詳細な現状ステータス（未完了タスク・本番デプロイのために必要な追加手順）は **[AGENTS.md](./AGENTS.md)** を参照。
+詳細な現状ステータス・登壇構成・未完了タスクは **[AGENTS.md](./AGENTS.md)** を参照。
