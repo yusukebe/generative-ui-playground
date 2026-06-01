@@ -148,23 +148,32 @@ export type WeatherInfo = {
   precipProb: number | null
 } | null
 
-/** 天気バナー (全バンド共通)。データは上位から渡す。 */
+/** 天気バナー (全バンド共通)。データは上位から渡す。フラットで Kumo っぽく。 */
 export function WeatherBanner({ weather }: { weather: WeatherInfo }) {
   if (!weather) return null
   return (
     <div
       style={{
-        background: 'linear-gradient(135deg,#3b4cca,#5b6ee1)',
-        color: '#fff',
+        border: `1px solid ${colors.border}`,
         borderRadius: 12,
-        padding: '12px 16px',
-        fontWeight: 700,
-        textAlign: 'center',
+        padding: '12px 14px',
+        background: colors.surface,
+        display: 'flex',
+        gap: 12,
+        alignItems: 'center',
+        color: colors.text,
         fontFamily:
           "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans', 'Noto Sans JP', sans-serif",
       }}
     >
-      {weather.emoji} {weather.label} / 最高{weather.tempMax ?? '?'}℃ / 降水{weather.precipProb ?? '?'}%
+      <span style={{ fontSize: 26, lineHeight: 1 }}>{weather.emoji}</span>
+      <div>
+        <div style={{ fontWeight: 600, fontSize: 14 }}>{weather.label}</div>
+        <div style={{ fontSize: 12, color: colors.muted }}>
+          最高 {weather.tempMax ?? '?'}℃ ・ 最低 {weather.tempMin ?? '?'}℃ ・ 降水{' '}
+          {weather.precipProb ?? '?'}%
+        </div>
+      </div>
     </div>
   )
 }

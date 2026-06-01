@@ -360,9 +360,15 @@ export function Weather({ date }) {
   const w = useWeather(date)
   if (!w) return null
   return (
-    <div style={{ background: 'linear-gradient(135deg,#3b4cca,#5b6ee1)', color: '#fff',
-      borderRadius: 14, padding: '14px 18px', fontWeight: 700, textAlign: 'center' }}>
-      {w.emoji} {w.label} / 最高{w.tempMax}℃ / 最低{w.tempMin}℃ / 降水確率{w.precipProb}%
+    <div style={{ border: '1px solid #dce0e8', borderRadius: 12, padding: '12px 14px',
+      background: '#fff', display: 'flex', gap: 12, alignItems: 'center' }}>
+      <span style={{ fontSize: 26, lineHeight: 1 }}>{w.emoji}</span>
+      <div>
+        <div style={{ fontWeight: 600, fontSize: 14 }}>{w.label}</div>
+        <div style={{ fontSize: 12, color: '#6b7280' }}>
+          最高 {w.tempMax}℃ ・ 最低 {w.tempMin}℃ ・ 降水 {w.precipProb}%
+        </div>
+      </div>
     </div>
   )
 }
