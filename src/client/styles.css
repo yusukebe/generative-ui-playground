@@ -916,10 +916,22 @@ body,
 .advisor__chat {
   width: 340px;
   flex-shrink: 0;
-  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+/* 左右の幅を調整するドラッグ可能な仕切り */
+.advisor__resizer {
+  flex: 0 0 6px;
+  cursor: col-resize;
+  background: var(--border);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.advisor__resizer:hover,
+.advisor__resizer:active {
+  background: var(--accent);
 }
 .advisor__log {
   flex: 1;

@@ -86,6 +86,27 @@ export function Compare() {
   const [historyIndex, setHistoryIndex] = useState(-1)
   const compareRef = useRef<HTMLDivElement>(null)
   const chatLogRef = useRef<HTMLDivElement>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const [chatWidth, setChatWidth] = useState(340)
+
+  // 中央のリサイザー: ドラッグでチャット(左)幅を調整
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault()
+    const onMove = (ev: MouseEvent) => {
+      const box = bodyRef.current
+      if (!box) return
+      const w = ev.clientX - box.getBoundingClientRect().left
+      setChatWidth(Math.max(240, Math.min(w, box.clientWidth - 360)))
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.userSelect = ''
+    }
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
 
   const ready = !!params
 
@@ -338,9 +359,9 @@ export function Compare() {
         </div>
       </header>
 
-      <div className='advisor__body'>
+      <div className='advisor__body' ref={bodyRef}>
         {/* 左: チャット (条件のやりとり) */}
-        <aside className='advisor__chat'>
+        <aside className='advisor__chat' style={{ width: chatWidth }}>
           <div className='advisor__log' ref={chatLogRef}>
             {convo.length === 0 && (
               <div className='advisor__intro'>
@@ -408,6 +429,15 @@ export function Compare() {
             </div>
           </form>
         </aside>
+
+        {/* ドラッグで左右の幅を調整 */}
+        <div
+          className='advisor__resizer'
+          onMouseDown={startResize}
+          role='separator'
+          aria-orientation='vertical'
+          title='ドラッグで幅を調整'
+        />
 
         {/* 右: プラン (主役) */}
         <main className='advisor__plan' ref={compareRef}>
