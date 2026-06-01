@@ -36,7 +36,7 @@ declare const RestaurantList: React.FC<{ restaurants: Restaurant[] }>
 `.trim()
 
 const TEMPLATE_BORROWED = `import React from 'react'
-import { renderToString } from 'react-dom/server'
+import { renderToString } from 'react-dom/server.edge'
 import { RestaurantList } from './restaurant-ui'
 
 export default {
@@ -55,7 +55,7 @@ export default {
 }`
 
 const TEMPLATE_RAW = `import React from 'react'
-import { renderToString } from 'react-dom/server'
+import { renderToString } from 'react-dom/server.edge'
 
 export default {
   async fetch(request) {
@@ -105,7 +105,7 @@ export function makeDynamicRenderTool(env: CloudflareBindings) {
 - Response を返してください (Content-Type: text/html を想定)
 - 利用可能ライブラリ:
   - \`react\` (default import)
-  - \`react-dom/server\` (renderToString)
+  - \`react-dom/server.edge\` (renderToString) — **必ず \`server.edge\` を使うこと**。\`react-dom/server\` (拡張子なし) は node 版で Worker runtime では動きません
   - \`./restaurant-ui\` (事前定義の RestaurantCard / RestaurantList)
 
 # restaurant-ui の型
@@ -129,13 +129,26 @@ ${TEMPLATE_RAW}
       // 1. host 側で search を実行
       const restaurants = await searchRestaurants(env.DB, input.search)
 
-      // 2. LLM の TSX コードを worker-bundler でバンドル
+      // 2. LLM の TSX コードを pre-process:
+      //    react-dom/server は default で node 版 (util を require) を引いてしまい
+      //    Worker runtime で動かない。確実に edge 版を引くため
+      //    'react-dom/server' → 'react-dom/server.edge' に置換する
+      const processedCode = input.code.replace(
+        /from\s+(['"])react-dom\/server\1/g,
+        "from 'react-dom/server.edge'"
+      )
+      const processedUiSource = uiComponentsSource.replace(
+        /from\s+(['"])react-dom\/server\1/g,
+        "from 'react-dom/server.edge'"
+      )
+
+      // 3. worker-bundler でバンドル
       //    - react / react-dom は npm registry から resolve
       //    - restaurant-ui.tsx は files に含めて相対 import で参照
       const { mainModule, modules } = await createWorker({
         files: {
-          'src/index.tsx': input.code,
-          'src/restaurant-ui.tsx': uiComponentsSource,
+          'src/index.tsx': processedCode,
+          'src/restaurant-ui.tsx': processedUiSource,
           'package.json': JSON.stringify({
             dependencies: {
               react: '^19.2.6',
@@ -147,6 +160,7 @@ ${TEMPLATE_RAW}
         bundle: true,
         jsx: 'automatic',
         jsxImportSource: 'react',
+        conditions: ['workerd', 'worker', 'edge-light', 'browser', 'default'],
       })
 
       // 3. Dynamic Worker をスピンアップ
