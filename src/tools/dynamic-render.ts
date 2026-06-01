@@ -217,7 +217,7 @@ export async function renderDynamicComponent(
 /** worker 内で使う streaming 版 restaurant-ui (B-2)。
  *  こちらが渡すのは「表示部品」と「データ取得フック」だけ。
  *  Suspense 境界や per-item 取得の合成は **AI が書いたコンポーネント側で行う**。 */
-const STREAMING_UI_SOURCE = `import React from 'react'
+const STREAMING_UI_SOURCE = `import React, { Suspense } from 'react'
 import { RestaurantCard } from './base-ui'
 export { RestaurantCard } from './base-ui'
 
@@ -252,15 +252,23 @@ export function useRamenShop(id) {
   return e.data
 }
 
-// ローディング用スケルトン (Suspense 保留中だと分かるようラベルを出す)
+const _shimmer = {
+  background: 'linear-gradient(90deg, #eef0f4 25%, #ffffff 50%, #eef0f4 75%)',
+  backgroundSize: '200% 100%', animation: 'rc-shimmer 1.2s infinite',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  color: '#6b7280', fontSize: 13, fontWeight: 600,
+}
+
+// ローディング用スケルトン (カード高さに合わせてレイアウトシフトを防ぐ)
 export function CardSkeleton() {
-  return <div style={{
-    height: 168, borderRadius: 12, border: '1px solid #dce0e8',
-    background: 'linear-gradient(90deg, #eef0f4 25%, #ffffff 50%, #eef0f4 75%)',
-    backgroundSize: '200% 100%', animation: 'rc-shimmer 1.2s infinite',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    color: '#6b7280', fontSize: 13, fontWeight: 600,
-  }}>⏳ 取得中… (Suspense)</div>
+  return <div style={{ ..._shimmer, height: 236, borderRadius: 14, border: '1px solid #dce0e8' }}>
+    ⏳ 取得中… (Suspense)
+  </div>
+}
+
+// 天気バナー用のスケルトン (細い・バナーと同じ高さ)
+export function WeatherSkeleton() {
+  return <div style={{ ..._shimmer, height: 52, borderRadius: 14 }}>⏳ 天気を取得中… (Suspense)</div>
 }
 
 // 〆ラーメンの葉 (居酒屋カードとは別UI・ラーメン専用)。id を渡すと useRamenShop で
@@ -278,6 +286,40 @@ export function Ramen({ id }) {
         <h3 style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 700 }}>{r.name}</h3>
         <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6b7280' }}>{r.area} · 家系ラーメン</p>
       </div>
+    </div>
+  )
+}
+
+// 〆ラーメンの一覧を自分で取得して suspend するフック (ramen-api はキー不要なので worker が直接叩ける)
+const _rlcache = new Map()
+export function useRamenList(count) {
+  const key = 'list:' + count
+  let e = _rlcache.get(key)
+  if (!e) {
+    e = { done: false, data: [] }
+    e.promise = new Promise((res) => setTimeout(res, 500))
+      .then(() => fetch('https://ramen-api.dev/shops?perPage=' + (count || 2)))
+      .then((r) => r.json())
+      .then((d) => { e.data = ((d && d.shops) || []).map((s) => ({ id: s.id, name: s.name })) })
+      .catch(() => { e.data = [] })
+      .finally(() => { e.done = true })
+    _rlcache.set(key, e)
+  }
+  if (!e.done) throw e.promise
+  return e.data
+}
+
+// 〆ラーメン一覧。count を渡すと worker が一覧を取得し、各店を per-item Suspense で描画。
+// **必ず <Suspense> の中で使う** (一覧取得自体が suspend する)。
+export function RamenList({ count = 2 }) {
+  const list = useRamenList(count)
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+      {list.map((r) => (
+        <Suspense key={r.id} fallback={<CardSkeleton />}>
+          <Ramen id={r.id} />
+        </Suspense>
+      ))}
     </div>
   )
 }
@@ -369,7 +411,7 @@ const DOC_CSS = `body{margin:0;background:#f7f8fa;color:#1a1d26;font-family:-app
 function wrapStreamingModule(component: string): string {
   return `import React, { Suspense } from 'react'
 import { renderToReadableStream } from 'react-dom/server.edge'
-import { RestaurantCard, RestaurantList, useRamenShop, CardSkeleton, Ramen, Weather, LastTrain } from './restaurant-ui'
+import { RestaurantCard, RestaurantList, CardSkeleton, WeatherSkeleton, Ramen, RamenList, Weather, LastTrain } from './restaurant-ui'
 
 ${component}
 
@@ -378,28 +420,26 @@ const Root = (typeof App !== 'undefined' && App) || (typeof APP !== 'undefined' 
 
 export default {
   async fetch(request: Request): Promise<Response> {
-    const { restaurants, ramens } = (await request.json()) as { restaurants: unknown[]; ramens: any[] }
+    // お店(Places=要キー)だけホストが prop で渡す。天気/〆ラーメンは worker が描画時に取得する。
+    const { restaurants } = (await request.json()) as { restaurants: unknown[] }
     const css = ${JSON.stringify(DOC_CSS)}
     let stream: ReadableStream
     try {
       stream = await renderToReadableStream(
         <html>
           <head><meta charSet="utf-8" /><style dangerouslySetInnerHTML={{ __html: css }} /></head>
-          <body><div style={{ padding: 24 }}><Root restaurants={restaurants} ramens={ramens} /></div></body>
+          <body><div style={{ padding: 24 }}><Root restaurants={restaurants} /></div></body>
         </html>
       )
     } catch (e) {
-      // AI のコードが落ちても: 居酒屋は即・〆ラーメンは Suspense でフォールバック描画
+      // AI のコードが落ちても: お店は即・天気/〆ラーメンは Suspense でフォールバック描画
       stream = await renderToReadableStream(
         <html>
           <head><meta charSet="utf-8" /><style dangerouslySetInnerHTML={{ __html: css }} /></head>
           <body><div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <Suspense fallback={<WeatherSkeleton />}><Weather date={new Date().toISOString().slice(0,10)} /></Suspense>
             <RestaurantList restaurants={restaurants} />
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(260px, 100%), 1fr))', gap: 12 }}>
-              {(ramens || []).map((r) => (
-                <Suspense key={r.id} fallback={<CardSkeleton />}><Ramen id={r.id} /></Suspense>
-              ))}
-            </div>
+            <Suspense fallback={<CardSkeleton />}><RamenList count={1} /></Suspense>
           </div></body>
         </html>
       )
@@ -417,8 +457,7 @@ export default {
 export async function renderDynamicComponentStream(
   env: CloudflareBindings,
   componentCode: string,
-  restaurants: unknown[],
-  ramens: unknown[] = []
+  restaurants: unknown[]
 ): Promise<{ stream: ReadableStream<Uint8Array>; moduleCode: string }> {
   const component = decodeUnicodeEscapes(componentCode)
   const moduleCode = wrapStreamingModule(component)
@@ -456,7 +495,7 @@ export async function renderDynamicComponentStream(
   const response = await worker.getEntrypoint().fetch('http://internal/', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ restaurants, ramens }),
+    body: JSON.stringify({ restaurants }),
   })
   if (!response.body) throw new Error('Dynamic streaming SSR returned no body')
   return { stream: response.body, moduleCode }

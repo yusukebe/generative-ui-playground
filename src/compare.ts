@@ -400,38 +400,41 @@ ${ctxPhotos}`,
           send({ type: 'open-ended', html })
           metric(await usage, html)
         } else {
-          // Dynamic は事前収集しない。restaurants(お店) と ramens(〆id) は描画時に host が prop で渡す。
+          // Dynamic は事前収集しない。restaurants(お店) のみ描画時に host が prop で渡す
+          // (Places=要キー)。天気/〆ラーメンはキー不要なので worker のコンポーネントが描画時に取得。
           const dynCtx = `条件: ${params.dateLabel}(${params.date}) / ${params.area} / ${params.partySize}人 / 用途:${params.purpose} / 気分:${params.mood || '指定なし'}
-※ restaurants(お店) と ramens(〆ラーメンの id/name) は描画時に props で渡されます。データは埋め込まず props を使うこと。`
+※ restaurants(お店) は描画時に props で渡されます。データは埋め込まず props を使うこと。`
           const { textStream, text, usage } = streamText({
             model,
             providerOptions,
             prompt: `あなたは Dynamic バンド(Code Mode)のアシスタントです。夜のプランを表示する React
-コンポーネント function App({ restaurants, ramens }) を1つだけ書いてください (import/export は書かない)。
-- restaurants = お店 (props で渡る) / ramens = 〆ラーメン (id と name のみ・props で渡る)
+コンポーネント function App({ restaurants }) を1つだけ書いてください (import/export は書かない)。
+- restaurants = お店 (props で渡る) / 天気・〆ラーメンは専用コンポーネントが自分で取得する
 - **データ取得は全部コンポーネント側**。あなたは型を見て組み立てるだけ (事前取得は不要)
 
 # 使える API (型定義だけ渡します。実装は Worker 側にあり、**あなたは中身を知る必要はありません**)
 \`\`\`ts
 type Restaurant = { id: string; name: string; area: string; genre: string; tags: string[]; note: string | null; price_range: string | null; photo_url?: string | null }
-// 非同期コンポーネント (内部で fetch する。**必ず <Suspense> で包む**)
-declare const Weather: React.FC<{ date: string }>   // 天気バナー (自分で天気を取得)
-declare const Ramen:   React.FC<{ id: string }>     // 〆ラーメン1件 (自分でラーメン詳細を取得)
+// 非同期コンポーネント (内部で自分で fetch する。**必ず <Suspense> で包む**)
+declare const Weather:   React.FC<{ date: string }>     // 天気バナー (自分で天気を取得)
+declare const RamenList: React.FC<{ count?: number }>   // 〆ラーメン一覧 (自分で一覧+各店を取得)
 // 同期コンポーネント (即描画)
 declare const LastTrain:      React.FC<{ area: string }>                  // 終電案内
 declare const RestaurantCard: React.FC<{ restaurant: Restaurant }>        // お店カード1枚
 declare const RestaurantList: React.FC<{ restaurants: Restaurant[] }>     // お店一覧
-declare const CardSkeleton:   React.FC                                    // ローディング
+declare const CardSkeleton:    React.FC  // ローディング(カード高さ・〆ラーメン用)
+declare const WeatherSkeleton: React.FC  // ローディング(バナー高さ・天気用)
 \`\`\`
 
 # 書き方 (テンプレ。店名・天気・終電の値はコードに埋めず、コンポーネントに任せる)
 - お店は **「1軒目」「2軒目」… のラベル付き**で、**横並びグリッド**に (縦に伸ばさない)
+- 〆ラーメンは <RamenList count={1} /> を <Suspense> で包むだけ (一覧取得もコンポーネント任せ)
 \`\`\`jsx
-function App({ restaurants, ramens }) {
+function App({ restaurants }) {
   const labels = ['1軒目', '2軒目', '3軒目']
   return (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Suspense fallback={<CardSkeleton />}><Weather date="${params.date}" /></Suspense>
+      <Suspense fallback={<WeatherSkeleton />}><Weather date="${params.date}" /></Suspense>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
         {restaurants.map((r, i) => (
           <div key={r.id}>
@@ -441,11 +444,7 @@ function App({ restaurants, ramens }) {
         ))}
       </div>
       <h2 style={{ fontSize: 14, margin: 0 }}>〆のラーメン</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-        {ramens.map((r) => (
-          <Suspense key={r.id} fallback={<CardSkeleton />}><Ramen id={r.id} /></Suspense>
-        ))}
-      </div>
+      <Suspense fallback={<CardSkeleton />}><RamenList count={1} /></Suspense>
       <LastTrain area="${params.area}" />
     </div>
   )

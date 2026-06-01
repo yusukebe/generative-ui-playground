@@ -4,7 +4,6 @@ import { runIntake, streamBand, type Band } from './compare'
 import { DEFAULT_MODEL, type ModelId } from './models'
 import type { PlanParams } from './schemas/plan'
 import { renderDynamicComponentStream } from './tools/dynamic-render'
-import { getRamenShops } from './tools/ramen'
 import { findRestaurants } from './tools/search-restaurants'
 
 export { RestaurantAgent } from './agent'
@@ -67,14 +66,9 @@ app.get('/api/dynamic-frame', async (c) => {
   } catch {
     return c.notFound()
   }
-  const [izakaya, ramen] = await Promise.all([
-    findRestaurants(c.env, { area, query: q, limit: 2 }),
-    getRamenShops(1),
-  ])
-  // restaurants(居酒屋) と ramens(〆) を別々に渡す。ramens は id+名前だけ
-  // (写真等の詳細は worker 内の useRamenShop が per-item 取得=本物の Suspense)
-  const ramenStubs = ramen.map((r) => ({ id: r.id, name: r.name }))
-  const { stream } = await renderDynamicComponentStream(c.env, code, izakaya, ramenStubs)
+  // お店(Places=要キー)だけホストが取得して渡す。天気/〆ラーメン(キー不要)は worker が描画時に取得。
+  const izakaya = await findRestaurants(c.env, { area, query: q, limit: 2 })
+  const { stream } = await renderDynamicComponentStream(c.env, code, izakaya)
   return new Response(stream, {
     headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
   })
