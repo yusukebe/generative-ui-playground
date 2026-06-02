@@ -168,42 +168,31 @@ Dynamic は Open-Ended の延長線上だが、LLM が**コードを書く** こ
 
 ## 現在の実装ステータス
 
-### 完了
+> ⚠️ **2026-06-02 大改修**: 旧「チャット＋ModeSelector」版から **「ご飯アドバイザー」4 バンド比較ビュー** (`src/client/Compare.tsx` のみ) に作り替えた。`agent.ts`(RestaurantAgent/onChatMessage) と `Chat.tsx` は**残置・未使用**。以下は現状の正。
 
-- ✅ React 19 SPA + Vite + Hono + Cloudflare Agents SDK の足場
-- ✅ ModelSelector (5 モデル, デフォルト Llama 4 Scout。Kimi K2.6 は Workers AI 上で遅すぎたため外した)
-- ✅ D1 (restaurants) + R2 (PHOTOS) バインド + 横浜 18 件シード
-- ✅ `search_restaurants` ツール (D1 検索)
-- ✅ **4 バンド構成** (ModeSelector で切替):
-  - Controlled: search_restaurants 直叩き → RestaurantList でレンダ
-  - Declarative: search_restaurants + `render_ui` (echo back) → DeclarativeView
-  - Open-Ended: search_restaurants + `render_html` (echo back) → iframe + CSP
-  - **Dynamic ✨**: `dynamic_render` (hono-eval パターン) → 完全な Worker module を spawn → SSR HTML
-- ✅ **Dynamic = hono-eval パターン** (`src/tools/dynamic-render.ts`):
-  - LLM は `{ search: SearchInput, code: string }` を出力
-  - host で search 実行 → `createWorker` で bundle (react/react-dom を npm 解決) → `env.LOADER.get` で spawn → `worker.getEntrypoint().fetch()` で HTML 取得
-  - `react-dom/server.edge` を prompt + string replace で強制
-  - restaurant-ui は files に同梱して `'./restaurant-ui'` で相対 import 可能
-- ✅ 共有 UI コンポーネント (`src/ui-components.tsx`、Chat 側と Dynamic Worker の両方で同一実装)
-- ✅ `@callable registerRestaurant`: 画像 DnD → Vision + 正規化 → D1+R2 → saveMessages
-- ✅ Admin token (localStorage + env.ADMIN_TOKEN)
-- ✅ ヘッダーに ModeSelector / ModelSelector / Clear / Admin / カラーステータス
-- ✅ AI メッセージにモードバッジ (Controlled/Declarative/Open-Ended/Dynamic)
-- ✅ Declarative/Open-Ended/Dynamic では search_restaurants の生結果表示を抑制 (重複防止)
-- ✅ 進行状況表示 (思考中スピナー)、Clear ボタン、チャット入力欄で ↑↓ で履歴辿り
-- ✅ 空状態にサンプルクエリチップ (デモ中に即送信できる)
-- ✅ prettier (hono 設定)、型チェック (`tsc --noEmit`) と本番ビルド (`vite build`)
-- ✅ E2E 動作確認 (4 バンドそれぞれ動作。当初 Kimi K2.6 で確認したが遅いため Llama 3.3 70B fp8 fast に変更)
+### 現状アーキ (要点)
+
+- **2 ペイン UI**: 左=チャット(条件のやりとり)/右=プラン(主役)。中央リサイザーでドラッグ幅調整、モバイルは縦積み。モデル選択は localStorage 記憶。`/gallery` に共有コンポーネント一覧ページ。
+- **フロー**: `/api/intake` (条件抽出・日付/エリア/人数/用途/気分/craving) → 表示中バンドが `/api/band` (`streamBand`) で **毎回「ツールでデータ収集 → 描画」を 1 本の NDJSON で実行**。タブ切替では再実行せず、↻リロードで再生成。
+- **ツール収集** (`gatherWithTools`): AI エージェントが `get_weather`/`get_last_train`/`search_restaurants`/`get_ramen` を呼んで集める（各 1 回・未呼びはホストがフォールバック）。**Dynamic だけは事前収集しない**（下記）。
+- **4 バンド**:
+  - Controlled = `generateObject(PlanSchema=title+steps)` → `PlanView`。AI は title/steps だけ、天気/終電/店は固定コンポーネント+データ。
+  - Declarative = `streamObject(blocks 語彙: weather/lastTrain/shop)` を選んで並べる → `DeclarativeView`。
+  - Open-Ended = `streamText` で HTML 1 枚 → iframe + CSP。写真は photo_url のみ。
+  - **Dynamic = Code Mode**: AI は `function App({restaurants})` を書くだけ、**`.d.ts`(型)だけ渡し実装は知らせない**。worker スコープに自己完結コンポーネント（`Weather`/`RamenList`=自分で fetch・Suspense、`LastTrain`=静的、`RestaurantCard` 等）を**文字列注入**。お店(Places=要キー)だけホストが prop で渡す＝**鍵の境界**。`/api/dynamic-frame` は POST `{code, restaurants}` を受け SSR。**コード生成と店検索は同一リクエストで並行**。
+- **メトリクス**: 各バンドに「初描画(TTFR・生成開始から)」+「プラン作成(収集+生成の合計: 時間/トークン/文字)」。狙い: Declarative/Dynamic=初描画が速い印象 / Open-Ended=重い / Dynamic=全体最速。
+- **デザイン**: Kumo の standalone CSS + Button。枠/絵文字/色を抑えたスッキリ系。天気はフラットなニュートラルカード。
+- ✅ Google Places (New) 実接続（`GOOGLE_MAPS_API_KEY` を `.dev.vars`）、写真は `/api/places-photo` プロキシ。天気=Open-Meteo、〆ラーメン=ramen-api.dev（いずれもキー不要）。
+- ✅ `tsc --noEmit` 通過、4 バンド + `/gallery` + モバイルをブラウザで E2E 確認済み。
 
 ### 未完了 / 要対応
 
-- ⚠️ **React Max update depth warning**: AI SDK の useChat の useSyncExternalStore で React が警告を出すことがある。動作は OK だがコンソールが汚れる
-- ⚠️ **Google Places API**: 住所/座標は `null` のまま (キー未設定)。本番までに `wrangler secret put GOOGLE_PLACES_API_KEY` + `src/tools/add-restaurant.ts` の埋め込み
-- ⚠️ **D1 リモートデプロイ**: `wrangler.jsonc` の `database_id: "local"` を実際の DB ID に置き換え (`wrangler d1 create generative-ui-playground` で取得)
-- ⚠️ **R2 バケット作成**: `wrangler r2 bucket create generative-ui-playground-photos`
-- ⚠️ **本番デプロイ未検証**: `bun run deploy` をまだ試していない
-- ⚠️ **worker-bundler の初回コスト**: Dynamic の最初の呼び出しは npm から react / react-dom を fetch + bundle するため遅い。本番では起動時に warm-up または cache 戦略が必要
-- ⚠️ **登壇用リハーサル**: 想定するデモシナリオを通しで実行
+- ⚠️ **本番デプロイ未検証**: `bun run deploy`。D1/R2 の ID、`wrangler secret put OPENAI_API_KEY` / `GOOGLE_MAPS_API_KEY`。
+- ⚠️ **worker-bundler の初回コスト**: Dynamic 初回は react/react-dom を fetch+bundle で遅い。本番は warm-up/cache を検討。
+- ⚠️ **お店も Suspense 化**(保留): `/api/shops` プロキシで `<Shops>` を worker 描画時取得にできるが、dev で worker→localhost が不安定なため見送り中。
+- ⚠️ **英語切替(i18n)** 未着手。
+- ⚠️ **旧コードの掃除**: `agent.ts` / `Chat.tsx` / `preparePlan` など未使用分は残置。
+- ⚠️ **登壇用リハーサル**: 通しで実行。
 
 ## 今後の検討候補 (登壇前に時間があれば)
 
