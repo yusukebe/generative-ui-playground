@@ -19,7 +19,7 @@ export const MODES: { value: Mode; label: string; description: string }[] = [
   {
     value: 'dynamic',
     label: 'Dynamic ✨',
-    description: 'Agent が JSX でコードを書き Dynamic Worker で SSR (第 4 のバンド)',
+    description: 'Agent が JSX でコードを書き Dynamic Worker で SSR (第 4 のパターン)',
   },
 ]
 

@@ -95,7 +95,7 @@ export function Gallery() {
 
       <div className='gallery__body'>
         <p className='gallery__lead'>
-          ご飯アドバイザーの 4 バンドが共通で使う部品キット。Controlled / Declarative /
+          ご飯アドバイザーの 4 パターンが共通で使う部品キット。Controlled / Declarative /
           Dynamic はこれらを組み合わせて UI を作ります (Dynamic は Worker 側に同等の自己取得版を持つ)。
         </p>
 

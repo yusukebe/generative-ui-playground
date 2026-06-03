@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 /**
- * Controlled バンドの語彙。
+ * Controlled パターンの語彙。
  * AI は「事前定義された既製コンポーネント」から 1 つ選び、最小限の props を渡すだけ。
  * (Declarative のように構造を自由に組むのではなく、用意された部品を選ぶのが Controlled)
  */

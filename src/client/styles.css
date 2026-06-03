@@ -764,7 +764,7 @@ body,
   margin-top: 8px;
 }
 
-/* iframe バンド (Open-Ended / Dynamic) — 中身の高さに自動フィットさせ箱っぽさを消す */
+/* iframe パターン (Open-Ended / Dynamic) — 中身の高さに自動フィットさせ箱っぽさを消す */
 .band-frame {
   display: block;
   width: 100%;
@@ -1051,11 +1051,23 @@ body,
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   text-align: center;
   color: var(--text-muted);
   font-size: 13px;
   line-height: 1.7;
+}
+.advisor__intro-lead {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.advisor__intro-sub {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-muted);
 }
 .advisor__plan {
   flex: 1;
@@ -1129,7 +1141,7 @@ body,
   background: var(--surface);
 }
 
-/* バンド説明 + 生成メトリクス */
+/* パターン説明 + 生成メトリクス */
 .band-tabs__meta {
   display: flex;
   align-items: center;
@@ -1174,7 +1186,7 @@ body,
   cursor: default;
 }
 
-/* 4バンド比較ビュー */
+/* 4パターン比較ビュー */
 .compare {
   flex: 1;
   overflow-y: auto;
@@ -1379,7 +1391,7 @@ body,
   gap: 8px;
 }
 
-/* バンド切替タブ (旧 / desc のみ使用) */
+/* パターン切替タブ (旧 / desc のみ使用) */
 .band-tabs {
   display: flex;
   gap: 8px;
@@ -1431,7 +1443,7 @@ body,
   animation: thinking-bounce 1s infinite ease-in-out;
   vertical-align: middle;
 }
-/* バンドを切り替えると、そのバンドの結果が全幅で主役になる */
+/* パターンを切り替えると、そのパターンの結果が全幅で主役になる */
 .band-panel {
   display: flex;
   flex-direction: column;
@@ -1466,7 +1478,7 @@ body,
   word-break: break-word;
 }
 
-/* 条件＋バンドタブ (固定はしない・プランと一緒にスクロール) */
+/* 条件＋パターンタブ (固定はしない・プランと一緒にスクロール) */
 .plan-head {
   background: var(--bg);
   padding: 2px 0 4px;
@@ -1491,7 +1503,7 @@ body,
   white-space: nowrap;
 }
 
-/* Controlled バンドのプラン描画 */
+/* Controlled パターンのプラン描画 */
 .plan {
   display: flex;
   flex-direction: column;
@@ -1553,7 +1565,7 @@ body,
   padding: 10px 12px;
 }
 
-/* Controlled バンド (パレットから選んだ部品を描画) */
+/* Controlled パターン (パレットから選んだ部品を描画) */
 .controlled {
   display: flex;
   flex-direction: column;

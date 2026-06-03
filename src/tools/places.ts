@@ -47,13 +47,18 @@ const PRICE_LABEL: Record<string, string> = {
   PRICE_LEVEL_VERY_EXPENSIVE: '¥¥¥¥',
 }
 
+// 札幌系のエリア語 (これが入っていれば「札幌」に寄せる)
+const SAPPORO_HINTS = ['札幌', 'すすきの', 'ススキノ', '大通', '狸小路', '中島公園', '北海道']
+
 /** area/genre/atmosphere/query を 1 本のテキストクエリに束ねる */
 function buildTextQuery(input: SearchInput): string {
   const parts = [input.area, input.genre, input.atmosphere, input.query]
     .map((s) => (s ? decodeUnicodeEscapes(s).trim() : ''))
     .filter(Boolean)
   const q = parts.join(' ')
-  // 横浜・関内周辺に寄せる (題材がローカルなため)
+  // 都市名でローカルに寄せる。札幌系の語があれば札幌、無ければ横浜に寄せる。
+  const isSapporo = SAPPORO_HINTS.some((h) => q.includes(h))
+  if (isSapporo) return q.includes('札幌') ? q : `${q} 札幌`.trim()
   return q.includes('横浜') ? q : `${q} 横浜`.trim()
 }
 

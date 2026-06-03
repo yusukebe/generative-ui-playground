@@ -190,7 +190,7 @@ export function Chat({ view, onViewChange }: { view: View; onViewChange: (v: Vie
 }
 
 function detectMessageMode(parts: MessagePart[]): { label: string; bandClass: string } | null {
-  // parts 全体をスキャンして、より specific な (バンド特性が強い) tool を優先する
+  // parts 全体をスキャンして、より specific な (パターン特性が強い) tool を優先する
   const types = new Set(parts.map((p) => p.type))
   if (types.has('tool-dynamic_render')) return { label: 'Dynamic ✨', bandClass: 'dynamic' }
   if (types.has('tool-render_html')) return { label: 'Open-Ended', bandClass: 'open-ended' }
@@ -245,7 +245,7 @@ type MessagePart =
   | { type: string; [k: string]: unknown }
 
 /**
- * Dynamic バンド: LLM が書いた Worker module の SSR 結果を表示。
+ * Dynamic パターン: LLM が書いた Worker module の SSR 結果を表示。
  * - input.code: LLM が書いた TSX ソース
  * - output.body: Worker の Response body (HTML)
  * - output.contentType: Worker の Response Content-Type
@@ -324,20 +324,20 @@ function PartView({ part, hideSearchOutput }: { part: MessagePart; hideSearchOut
       return <div className='tool-error'>ツールエラー: {tp.errorText ?? 'unknown'}</div>
     }
     if (tp.state === 'output-available') {
-      // Dynamic バンド (LLM が書く Worker module を SSR 実行)
+      // Dynamic パターン (LLM が書く Worker module を SSR 実行)
       if (toolName === 'dynamic_render') return <DynamicRenderView part={tp} />
-      // Controlled バンド (Declarative/Open-Ended/Dynamic では搬送路扱いで隠す)
+      // Controlled パターン (Declarative/Open-Ended/Dynamic では搬送路扱いで隠す)
       if (toolName === 'search_restaurants') {
         if (hideSearchOutput) return null
         const output = tp.output as { restaurants?: Restaurant[] } | undefined
         if (output?.restaurants) return <RestaurantList restaurants={output.restaurants} />
       }
-      // Declarative バンド
+      // Declarative パターン
       if (toolName === 'render_ui') {
         const output = tp.output as DeclarativeUI | undefined
         if (output) return <DeclarativeView ui={output} />
       }
-      // Open-Ended バンド
+      // Open-Ended パターン
       if (toolName === 'render_html') {
         const output = tp.output as { html?: string } | undefined
         if (output?.html) return <OpenEndedView html={output.html} />

@@ -2,7 +2,7 @@ import type { ControlledUI } from '../../schemas/controlled'
 import { RestaurantCard, RestaurantList, type Restaurant } from '../../ui-components'
 
 /**
- * Controlled バンドの描画。
+ * Controlled パターンの描画。
  * AI は「既製コンポーネントを 1 つ選ぶ」だけ (list / highlight / ranking)。
  * ここでその選択を事前定義済みコンポーネントに dispatch する。
  */

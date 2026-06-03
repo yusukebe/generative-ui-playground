@@ -30,7 +30,7 @@ export const IntakeSchema = z.object({
 
 export type IntakeResult = z.infer<typeof IntakeSchema>
 
-// Controlled バンド: 既製の「プラン」テンプレートに AI が値を流し込む。
+// Controlled パターン: 既製の「プラン」テンプレートに AI が値を流し込む。
 // 天気/終電は WeatherBanner/LastTrainCard(共有コンポーネント)が描くので、ここでは
 // タイトルと各ステップ(店選びと理由)だけ AI に埋めさせる。
 export const PlanSchema = z.object({

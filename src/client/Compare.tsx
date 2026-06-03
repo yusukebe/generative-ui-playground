@@ -63,12 +63,15 @@ const TOOL_LABELS: Record<string, string> = {
   get_ramen: '🍜 〆ラーメンを取得',
 }
 
-// デモで詰まらないよう、日付・エリア・人数が揃った「一発で通る」例にしておく
+// デモで詰まらないよう、日付・エリア・人数が揃った「一発で通る」例にしておく。
+// 会場=札幌なので札幌を中心に、横浜(関内/みなとみらい/野毛)も残す。craving デモも混ぜる。
 const SAMPLES = [
-  '関内で今日、一人で飲みたい',
-  '来週の金曜、関内で4人で接待',
-  '今週末 野毛で2人デート',
+  'すすきので今夜、一人で飲みたい',
+  '札幌駅で金曜、4人で接待',
+  'すすきので海鮮、今夜2人',
+  '関内で今週末、2人デート',
   'みなとみらいで明日、3人で女子会',
+  '野毛で金曜、もつ食べたい、3人',
 ]
 
 export function Compare() {
@@ -157,7 +160,7 @@ export function Compare() {
       if (!data.ready) {
         setConvo([...nextConvo, { role: 'assistant', text: data.question }])
       } else {
-        // 条件確定 → プランヘッダを即表示。表示中バンドが「ツール収集→描画」を毎回実行する
+        // 条件確定 → プランヘッダを即表示。表示中パターンが「ツール収集→描画」を毎回実行する
         setParams(data.params)
         setResults(EMPTY_RESULTS)
         generateBand(band, data.params)
@@ -169,8 +172,8 @@ export function Compare() {
     }
   }
 
-  // 1バンド = 「ツールでデータ収集 → 描画」を毎回まとめて実行する。
-  // ストリームは tool/weather/lasttrain/izakaya/ramen(収集) → render-start → バンド描画 + metrics。
+  // 1パターン = 「ツールでデータ収集 → 描画」を毎回まとめて実行する。
+  // ストリームは tool/weather/lasttrain/izakaya/ramen(収集) → render-start → パターン描画 + metrics。
   const generateBand = async (b: Band, p: PlanParams) => {
     genStartRef.current[b] = Date.now() // 初描画は「生成開始(=ツール収集含む)」から測る
     setToolCalls([])
@@ -296,7 +299,7 @@ export function Compare() {
     })
   }
 
-  // バンドを切り替えたら、まだ生成していなければそのバンドを生成 (毎回ツール収集→描画)
+  // パターンを切り替えたら、まだ生成していなければそのパターンを生成 (毎回ツール収集→描画)
   const switchBand = (b: Band) => {
     setBand(b)
     if (params && results.status[b] === 'idle') generateBand(b, params)
@@ -366,7 +369,11 @@ export function Compare() {
             {convo.length === 0 && (
               <div className='advisor__intro'>
                 <div className='compare__empty-icon'>🌃</div>
-                <p>横浜の夜のプランを作ります。日付・エリア・人数・用途を一言で。</p>
+                <p className='advisor__intro-lead'>札幌・横浜の夜のご飯プランを作ります 🍶</p>
+                <p className='advisor__intro-sub'>
+                  日付・エリア・人数・用途を一言で。「すすきので海鮮」「関内でもつ」のように
+                  <strong>食べたいもの</strong>を添えてもOK。条件が足りなければ AI が聞き返します。
+                </p>
                 <div className='compare__samples'>
                   {SAMPLES.map((q) => (
                     <Button
@@ -419,7 +426,7 @@ export function Compare() {
                   if (historyIndex !== -1) setHistoryIndex(-1)
                 }}
                 onKeyDown={handleKeyDown}
-                placeholder='例: 来週の金曜、関内で4人で接待'
+                placeholder='例: すすきので金曜、4人で接待'
                 autoComplete='off'
                 autoFocus
               />
@@ -488,8 +495,8 @@ export function Compare() {
                   <div className='tool-activity__head'>
                     <span className='tool-activity__title'>
                       {results.status[band] === 'streaming'
-                        ? '🤖 このバンドがツールでデータ収集 → 描画中…'
-                        : '🤖 このバンドが収集に使ったツール (毎回実行)'}
+                        ? '🤖 このパターンがツールでデータ収集 → 描画中…'
+                        : '🤖 このパターンが収集に使ったツール (毎回実行)'}
                     </span>
                   </div>
                   <div className='tool-activity__list'>
@@ -511,7 +518,7 @@ export function Compare() {
                   <button
                     type='button'
                     className='band-reload'
-                    title='このバンドをもう一度生成 (ツール収集→描画)'
+                    title='このパターンをもう一度生成 (ツール収集→描画)'
                     disabled={results.status[band] === 'streaming'}
                     onClick={() => params && generateBand(band, params)}
                   >
@@ -530,7 +537,7 @@ export function Compare() {
                   {activeMetric && (
                     <span
                       className='band-metric'
-                      title='プラン作成の合計コスト = データ収集(ツール) + このバンドの生成。時間 / トークン / 生成文字数'
+                      title='プラン作成の合計コスト = データ収集(ツール) + このパターンの生成。時間 / トークン / 生成文字数'
                     >
                       プラン作成 {(activeMetric.ms / 1000).toFixed(1)}s · {activeMetric.tokens}tok ·{' '}
                       {activeMetric.chars.toLocaleString()}字
@@ -647,5 +654,5 @@ function Streaming({ label }: { label: string }) {
 }
 
 function Failed() {
-  return <div className='tool-error'>このバンドの生成に失敗しました (モデルを変えて再試行)</div>
+  return <div className='tool-error'>このパターンの生成に失敗しました (モデルを変えて再試行)</div>
 }

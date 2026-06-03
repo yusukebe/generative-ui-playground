@@ -39,7 +39,7 @@ const colors = {
 }
 
 export function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {
-  // Dynamic バンドで AI が書いたコードが undefined を渡しても SSR 全体を巻き込まない
+  // Dynamic パターンで AI が書いたコードが undefined を渡しても SSR 全体を巻き込まない
   if (!restaurant) return null
   return (
     <article
@@ -148,7 +148,7 @@ export type WeatherInfo = {
   precipProb: number | null
 } | null
 
-/** 天気バナー (全バンド共通)。データは上位から渡す。フラットで Kumo っぽく。 */
+/** 天気バナー (全パターン共通)。データは上位から渡す。フラットで Kumo っぽく。 */
 export function WeatherBanner({ weather }: { weather: WeatherInfo }) {
   if (!weather) return null
   return (
@@ -180,7 +180,7 @@ export function WeatherBanner({ weather }: { weather: WeatherInfo }) {
 
 export type LastTrainInfo = { station: string; summary: string; leaveBy: string } | null
 
-/** 終電案内カード (全バンド共通)。 */
+/** 終電案内カード (全パターン共通)。 */
 export function LastTrainCard({ lastTrain }: { lastTrain: LastTrainInfo }) {
   if (!lastTrain) return null
   return (

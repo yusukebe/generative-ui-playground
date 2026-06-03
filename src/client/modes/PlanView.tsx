@@ -9,9 +9,9 @@ import {
 } from '../../ui-components'
 
 /**
- * Controlled バンドのプラン描画。
+ * Controlled パターンのプラン描画。
  * AI は既製の「プラン」テンプレ (weatherNote / steps / tip) に値を流し込むだけ。
- * 天気/終電/店は**全バンド共通のコンポーネント** (WeatherBanner / LastTrainCard / RestaurantCard) で
+ * 天気/終電/店は**全パターン共通のコンポーネント** (WeatherBanner / LastTrainCard / RestaurantCard) で
  * 固定レイアウトに dispatch する。
  */
 export function PlanView({

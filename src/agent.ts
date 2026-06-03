@@ -8,7 +8,7 @@ import { renderHTMLTool, renderUITool } from './tools/render-ui'
 import { makeSearchRestaurantsTool } from './tools/search-restaurants'
 
 // ─────────────────────────────────────────────────────────────────
-// 4 バンドの実装:
+// 4 パターンの実装:
 //   Controlled  — 古典: search_restaurants 直叩き、クライアントがカード描画
 //   Declarative — 古典: render_ui (echo back) で JSON UI ツリーを搬送
 //   Open-Ended  — 古典: render_html (echo back) で HTML を iframe へ

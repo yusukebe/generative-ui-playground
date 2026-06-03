@@ -2,7 +2,7 @@ export type View = 'chat' | 'compare'
 
 const TABS: { value: View; label: string }[] = [
   { value: 'chat', label: 'チャット' },
-  { value: 'compare', label: '4バンド比較 ✨' },
+  { value: 'compare', label: '4パターン比較 ✨' },
 ]
 
 export function ViewTabs({ value, onChange }: { value: View; onChange: (v: View) => void }) {

@@ -32,12 +32,12 @@ app.post('/api/intake', async (c) => {
     mood: r.mood ?? '',
     craving: r.craving ?? '',
   }
-  // データ取得(天気/終電/店/ラーメン)は各バンド生成のたびに /api/band 内でツール経由で行う
+  // データ取得(天気/終電/店/ラーメン)は各パターン生成のたびに /api/band 内でツール経由で行う
   return c.json({ ready: true, params })
 })
 
 /**
- * 指定 1 バンドのプランを生成してストリーム配信。
+ * 指定 1 パターンのプランを生成してストリーム配信。
  * このエンドポイント内で「ツールでデータ収集 → 描画」を毎回まとめて行う。
  */
 app.post('/api/band', async (c) => {
@@ -52,7 +52,7 @@ app.post('/api/band', async (c) => {
   return streamBand(c.env, band, params, model ?? DEFAULT_MODEL)
 })
 
-// Dynamic バンドの Suspense ストリーミング SSR フレーム (iframe が fetch して使う)。
+// Dynamic パターンの Suspense ストリーミング SSR フレーム (iframe が fetch して使う)。
 // code と お店データ(restaurants) は POST で受け取る。お店検索は streamBand 側がコード生成と
 // 並行で済ませて渡してくるので、ここでは検索しない (天気/〆ラーメンは worker が描画時に取得)。
 const PHOTO_NAME = /^places\/[A-Za-z0-9_-]+\/photos\/[A-Za-z0-9_-]+$/

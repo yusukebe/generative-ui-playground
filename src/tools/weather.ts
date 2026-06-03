@@ -7,9 +7,15 @@
 import { tool } from 'ai'
 import { z } from 'zod'
 
-// 関内(横浜)の緯度経度
-const LAT = 35.4437
-const LON = 139.638
+// エリア→緯度経度。横浜(関内)と札幌(大通)に対応。それ以外は横浜にフォールバック。
+const AREA_COORDS: { match: string[]; lat: number; lon: number }[] = [
+  { match: ['札幌', 'すすきの', '大通', 'ススキノ', '狸小路', '中島公園'], lat: 43.0618, lon: 141.3545 },
+  { match: ['横浜', '関内', '野毛', 'みなとみらい', '中華街', '桜木町', '元町', '馬車道'], lat: 35.4437, lon: 139.638 },
+]
+function coordsFor(area = ''): { lat: number; lon: number } {
+  const hit = AREA_COORDS.find((c) => c.match.some((m) => area.includes(m)))
+  return hit ?? AREA_COORDS[1] // 既定は横浜
+}
 
 // WMO weather code → 日本語のざっくり天気
 function describeWeatherCode(code: number): { label: string; emoji: string } {
@@ -35,9 +41,10 @@ export type Weather = {
   precipProb: number | null
 }
 
-export async function getWeather(date: string): Promise<Weather | null> {
+export async function getWeather(date: string, area = ''): Promise<Weather | null> {
+  const { lat, lon } = coordsFor(area)
   const url =
-    `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}` +
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
     `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
     `&timezone=Asia%2FTokyo&forecast_days=16`
   const res = await fetch(url)

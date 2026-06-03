@@ -1,5 +1,5 @@
 /**
- * Dynamic バンドの実装。
+ * Dynamic パターンの実装。
  *
  * LLM には **`function APP({ restaurants }) { return <jsx> }` というコンポーネント
  * 関数だけ** を書かせる。import / export / fetch / Response などのボイラープレートは
@@ -324,15 +324,25 @@ export function RamenList({ count = 2 }) {
   )
 }
 
+// エリア→緯度経度 (札幌 / 横浜)。それ以外は横浜。
+function _coordsFor(area) {
+  const a = String(area || '')
+  if (['札幌', 'すすきの', 'ススキノ', '大通', '狸小路', '中島公園', '北海道'].some((m) => a.includes(m)))
+    return { lat: 43.0618, lon: 141.3545 }
+  return { lat: 35.4437, lon: 139.638 }
+}
+
 // 天気を自分で取得して suspend するフック (worker から Open-Meteo を直接叩く)
 const _wcache = new Map()
-export function useWeather(date) {
-  let e = _wcache.get(date)
+export function useWeather(date, area) {
+  const { lat, lon } = _coordsFor(area)
+  const key = date + '@' + lat
+  let e = _wcache.get(key)
   if (!e) {
     e = { done: false, data: null }
     // デモで Suspense が見えるよう少し待つ (天気は先に出す)
     e.promise = new Promise((res) => setTimeout(res, 700))
-      .then(() => fetch('https://api.open-meteo.com/v1/forecast?latitude=35.4437&longitude=139.638&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FTokyo&forecast_days=16'))
+      .then(() => fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FTokyo&forecast_days=16'))
       .then((r) => r.json())
       .then((d) => {
         const days = (d.daily && d.daily.time) || []
@@ -349,15 +359,15 @@ export function useWeather(date) {
       })
       .catch(() => { e.data = null })
       .finally(() => { e.done = true })
-    _wcache.set(date, e)
+    _wcache.set(key, e)
   }
   if (!e.done) throw e.promise
   return e.data
 }
 
-// 天気バナー。date を渡すと中で自分で取得して描画する。**<Suspense> の中で使う**。
-export function Weather({ date }) {
-  const w = useWeather(date)
+// 天気バナー。date(と area)を渡すと中で自分で取得して描画する。**<Suspense> の中で使う**。
+export function Weather({ date, area }) {
+  const w = useWeather(date, area)
   if (!w) return null
   return (
     <div style={{ border: '1px solid #dce0e8', borderRadius: 12, padding: '12px 14px',

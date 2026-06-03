@@ -1,6 +1,6 @@
 /**
  * ご飯アドバイザー (パターン比較)。
- * 1 行入力 → intake(条件抽出/不足なら質問) → 天気+店検索 → 4 バンドで「プラン」を描き分け。
+ * 1 行入力 → intake(条件抽出/不足なら質問) → 天気+店検索 → 4 パターンで「プラン」を描き分け。
  * 1 タスクでやることが多い (日付/天気/検索/複数パート) ので、ストリーミングの差が見える。
  *
  *   Controlled  — 既製プランテンプレに値を流し込む (generateObject)
@@ -68,7 +68,7 @@ export async function runIntake(
     model,
     schema: IntakeSchema,
     providerOptions,
-    prompt: `あなたは横浜の夜のプランを組むための条件を聞き取るアシスタントです。
+    prompt: `あなたは横浜・札幌の夜のプランを組むための条件を聞き取るアシスタントです。
 
 # 日付の解決 (最重要・自分で計算しない)
 今日は ${todayContext()}。日付は**下の対応表から選んで** date(YYYY-MM-DD) を埋める。自力で計算しない。
@@ -84,7 +84,7 @@ ${dateReference()}
 - どれかが本当に無いときだけ ready=false にし、不足の1つだけを短く質問する
 - 既に分かっている項目は二度と聞かない
 - dateLabel は「来週の金曜 (6/12)」のような人間向け表記
-- エリアは横浜近辺 (関内/中華街/野毛/みなとみらい/桜木町/元町 など)
+- エリアは横浜近辺 (関内/中華街/野毛/みなとみらい/桜木町/元町 など) または札幌近辺 (すすきの/大通/札幌駅/狸小路 など)
 - **craving**: 「もつが食べたい」「海鮮で」など具体的な食べ物/ジャンルがあれば入れる (無ければ null)。craving は ready の判定には含めない
 
 会話:
@@ -111,7 +111,7 @@ export async function preparePlan(
 
 /**
  * AI エージェントがツールを呼んでデータ(天気・終電・お店・〆ラーメン)を集める。
- * **各バンドの生成のたびに毎回実行する**(収集も描画もバンド単位)。
+ * **各パターンの生成のたびに毎回実行する**(収集も描画もパターン単位)。
  * tool/weather/lasttrain/izakaya/ramen イベントを send で逐次配信しつつ、
  * 集めたデータと「収集にかかったトークン数」を返す。
  */
@@ -142,13 +142,13 @@ async function gatherWithTools(
 
   const tools = {
     get_weather: tool({
-      description: '指定日(YYYY-MM-DD)の横浜(関内)の天気を取得する。1回だけ呼ぶ。',
+      description: '指定日(YYYY-MM-DD)の対象エリアの天気を取得する。1回だけ呼ぶ。',
       inputSchema: z.object({ date: z.string().describe('対象日 YYYY-MM-DD') }),
       execute: async ({ date }) => {
         if (gotWeather) return weatherData ?? { label: '取得済み' }
         gotWeather = true
         send({ type: 'tool', name: 'get_weather', args: { date } })
-        weatherData = await getWeather(date)
+        weatherData = await getWeather(date, params.area)
         send({ type: 'weather', weather: weatherData })
         return weatherData ?? { label: '取得できず' }
       },
@@ -198,7 +198,7 @@ async function gatherWithTools(
       tools,
       stopWhen: stepCountIs(8),
       providerOptions,
-      prompt: `あなたは横浜のご飯プランに必要なデータを集めるエージェントです。
+      prompt: `あなたは横浜・札幌のご飯プランに必要なデータを集めるエージェントです。
 以下の条件に対し、4つのツールを**すべて**呼んで情報を集めてください (順不同・並行で構いません)。
 - get_weather(date="${params.date}")
 - get_last_train(area="${params.area}")
@@ -224,7 +224,7 @@ async function gatherWithTools(
       send({ type: 'lasttrain', lastTrain: lastTrainData })
     }
     if (!gotWeather) {
-      weatherData = await getWeather(params.date)
+      weatherData = await getWeather(params.date, params.area)
       send({ type: 'weather', weather: weatherData })
     }
     if (!gotIzakaya) {
@@ -259,7 +259,7 @@ function dataForPrompt(restaurants: Restaurant[], includePhoto = false): string 
       note: r.note,
       price_range: r.price_range,
       address: r.address,
-      // Open-Ended は自前で <img> を書くため写真URLを渡す (他バンドは id 参照なので不要)
+      // Open-Ended は自前で <img> を書くため写真URLを渡す (他パターンは id 参照なので不要)
       ...(includePhoto && r.photo_url ? { photo_url: r.photo_url } : {}),
     }))
   )
@@ -296,9 +296,9 @@ function extractHTML(text: string): string {
 }
 
 /**
- * 指定 1 バンドの「プラン」を生成し NDJSON でストリーム配信。
+ * 指定 1 パターンの「プラン」を生成し NDJSON でストリーム配信。
  * **毎回まず自分でツールを呼んでデータを集め(gatherWithTools)、続けて描画する。**
- * メトリクスは「収集(ツール) + 生成」の合計を、このバンドの実コストとして計測する。
+ * メトリクスは「収集(ツール) + 生成」の合計を、このパターンの実コストとして計測する。
  */
 export function streamBand(
   env: CloudflareBindings,
@@ -314,7 +314,7 @@ export function streamBand(
       const providerOptions = isOpenAI
         ? undefined
         : { 'workers-ai': { max_tokens: 4096, reasoning_effort: 'low' as const } }
-      // 計測開始: ここから収集(ツール)＋描画ぜんぶがこのバンドのコスト
+      // 計測開始: ここから収集(ツール)＋描画ぜんぶがこのパターンのコスト
       const started = Date.now()
       // 1) データ収集。Controlled/Declarative/Open-Ended は事前にツールで集める。
       //    **Dynamic は事前収集しない** — 描画時にコンポーネントが Suspense で取得する(Code Mode)。
@@ -379,7 +379,7 @@ ${ctx}`,
           send({ type: 'declarative', ui: finalUi })
           metric(await usage, JSON.stringify(finalUi))
         } else if (band === 'open-ended') {
-          // Open-Ended は写真URLも渡し、自前で <img> を全件書く (他バンドは id 参照=軽い)
+          // Open-Ended は写真URLも渡し、自前で <img> を全件書く (他パターンは id 参照=軽い)
           const ctxPhotos = planContext(params, weather, restaurants, lastTrain, true)
           const { textStream, text, usage } = streamText({
             model,
@@ -407,7 +407,7 @@ ${ctxPhotos}`,
           const { textStream, text, usage } = streamText({
             model,
             providerOptions,
-            prompt: `あなたは Dynamic バンド(Code Mode)のアシスタントです。夜のプランを表示する React
+            prompt: `あなたは Dynamic パターン(Code Mode)のアシスタントです。夜のプランを表示する React
 コンポーネント function App({ restaurants }) を1つだけ書いてください (import/export は書かない)。
 - restaurants = お店 (props で渡る) / 天気・〆ラーメンは専用コンポーネントが自分で取得する
 - **データ取得は全部コンポーネント側**。あなたは型を見て組み立てるだけ (事前取得は不要)
@@ -416,7 +416,7 @@ ${ctxPhotos}`,
 \`\`\`ts
 type Restaurant = { id: string; name: string; area: string; genre: string; tags: string[]; note: string | null; price_range: string | null; photo_url?: string | null }
 // 非同期コンポーネント (内部で自分で fetch する。**必ず <Suspense> で包む**)
-declare const Weather:   React.FC<{ date: string }>     // 天気バナー (自分で天気を取得)
+declare const Weather:   React.FC<{ date: string; area?: string }>  // 天気バナー (自分で天気を取得)
 declare const RamenList: React.FC<{ count?: number }>   // 〆ラーメン一覧 (自分で一覧+各店を取得)
 // 同期コンポーネント (即描画)
 declare const LastTrain:      React.FC<{ area: string }>                  // 終電案内
@@ -434,7 +434,7 @@ function App({ restaurants }) {
   const labels = ['1軒目', '2軒目', '3軒目']
   return (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Suspense fallback={<WeatherSkeleton />}><Weather date="${params.date}" /></Suspense>
+      <Suspense fallback={<WeatherSkeleton />}><Weather date="${params.date}" area="${params.area}" /></Suspense>
       <LastTrain area="${params.area}" />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
         {restaurants.map((r, i) => (
