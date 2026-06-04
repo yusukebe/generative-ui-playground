@@ -238,8 +238,8 @@ export function useRamenShop(id) {
       .then((d) => {
         const s = d && d.shop
         e.data = s
-          ? { id: 'ramen:' + s.id, name: s.name, area: '横浜', genre: '家系ラーメン',
-              tags: ['家系', '〆'], note: '飲んだあとの〆の一杯に', address: null,
+          ? { id: 'ramen:' + s.id, name: s.name, area: s.prefecture || '', genre: 'ラーメン',
+              tags: ['ラーメン', '〆'], note: '飲んだあとの〆の一杯に', address: null,
               price_range: '¥', atmosphere: null,
               photo_url: (s.photos && s.photos[0] && s.photos[0].url) || null }
           : null
@@ -284,21 +284,31 @@ export function Ramen({ id }) {
       <div style={{ padding: '12px 14px' }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: '#f97316', letterSpacing: '0.05em' }}>🍜 〆の一杯</div>
         <h3 style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 700 }}>{r.name}</h3>
-        <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6b7280' }}>{r.area} · 家系ラーメン</p>
+        <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6b7280' }}>{r.area} · ラーメン</p>
       </div>
     </div>
   )
 }
 
-// 〆ラーメンの一覧を自分で取得して suspend するフック (ramen-api はキー不要なので worker が直接叩ける)
+// エリア→都道府県 (Ramen API の prefecture フィルタ用)
+function _prefFor(area) {
+  const a = String(area || '')
+  if (['札幌', 'すすきの', 'ススキノ', '大通', '狸小路', '中島公園', '北海道'].some((m) => a.includes(m)))
+    return '北海道'
+  return '神奈川県'
+}
+
+// 〆ラーメンの一覧を自分で取得して suspend するフック (ramen-api はキー不要なので worker が直接叩ける)。
+// area に合う都道府県で絞り込む。
 const _rlcache = new Map()
-export function useRamenList(count) {
-  const key = 'list:' + count
+export function useRamenList(count, area) {
+  const pref = _prefFor(area)
+  const key = 'list:' + count + ':' + pref
   let e = _rlcache.get(key)
   if (!e) {
     e = { done: false, data: [] }
     e.promise = new Promise((res) => setTimeout(res, 500))
-      .then(() => fetch('https://ramen-api.dev/shops?perPage=' + (count || 2)))
+      .then(() => fetch('https://ramen-api.dev/shops?perPage=' + (count || 1) + '&prefecture=' + encodeURIComponent(pref)))
       .then((r) => r.json())
       .then((d) => { e.data = ((d && d.shops) || []).map((s) => ({ id: s.id, name: s.name })) })
       .catch(() => { e.data = [] })
@@ -309,10 +319,10 @@ export function useRamenList(count) {
   return e.data
 }
 
-// 〆ラーメン一覧。count を渡すと worker が一覧を取得し、各店を per-item Suspense で描画。
+// 〆ラーメン一覧。count と area を渡すと worker が該当エリアの一覧を取得し、各店を per-item Suspense で描画。
 // **必ず <Suspense> の中で使う** (一覧取得自体が suspend する)。
-export function RamenList({ count = 2 }) {
-  const list = useRamenList(count)
+export function RamenList({ count = 1, area }) {
+  const list = useRamenList(count, area)
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
       {list.map((r) => (
