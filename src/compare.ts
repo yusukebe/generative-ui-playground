@@ -316,22 +316,24 @@ export function streamBand(
         : { 'workers-ai': { max_tokens: 4096, reasoning_effort: 'low' as const } }
       // 計測開始: ここから収集(ツール)＋描画ぜんぶがこのパターンのコスト
       const started = Date.now()
-      // 1) データ収集。Controlled/Declarative/Open-Ended は事前にツールで集める。
-      //    **Dynamic は事前収集しない** — 描画時にコンポーネントが Suspense で取得する(Code Mode)。
+      // 1) データ収集。**Declarative / Open-Ended のみ**事前にツールで集める(2フェーズ: 収集→描画)。
+      //    **Static は1フェーズ** — 1回の streamText でツールを呼び、各結果が直接描画に流れる(参考デモと同じ)。
+      //    **Dynamic も収集しない** — 描画時にコンポーネントが Suspense で取得する(Code Mode)。
       let weather: Weather | null = null
       let restaurants: Restaurant[] = []
       let lastTrain: LastTrain = getLastTrain(params.area)
       let agentTokens = 0
-      if (band !== 'dynamic') {
+      const twoPhase = band === 'declarative' || band === 'open-ended'
+      if (twoPhase) {
         const gathered = await gatherWithTools(env, params, modelId, send)
         weather = gathered.weather
         restaurants = gathered.restaurants
         lastTrain = gathered.lastTrain
         agentTokens = gathered.agentTokens
       }
-      // 2) 描画フェーズ開始 (初描画 TTFR はここから測る)
+      // 2) 描画フェーズ開始 (D/OE 用。初描画 TTFR はここから測る)
       send({ type: 'render-start' })
-      const ctx = band === 'dynamic' ? '' : planContext(params, weather, restaurants, lastTrain)
+      const ctx = twoPhase ? planContext(params, weather, restaurants, lastTrain) : ''
       // 生成コストの計測 = 収集トークン + 生成トークン、時間は収集込みの総時間
       const metric = (usage: LanguageModelUsage | undefined, output: string) =>
         send({
@@ -343,18 +345,103 @@ export function streamBand(
 
       try {
         if (band === 'controlled') {
-          const { object, usage } = await generateObject({
+          // Static = 1フェーズ。1回の streamText でデータツールを呼び、各結果が直接描画に流れる。
+          // 並びは build_plan ツールで組む(参考デモの generateItinerary に相当)。generateObject は使わない。
+          let izakaya: Restaurant[] = []
+          let ramen: Restaurant[] = []
+          let planJson = ''
+          const dq = [params.craving, params.purpose, params.mood].filter(Boolean).join(' ') || 'おすすめ'
+          const staticTools = {
+            get_weather: tool({
+              description: '対象エリアの天気を取得する。1回だけ呼ぶ。',
+              inputSchema: z.object({ date: z.string().describe('対象日 YYYY-MM-DD') }),
+              execute: async ({ date }) => {
+                send({ type: 'tool', name: 'get_weather', args: { date } })
+                const w = await getWeather(date, params.area)
+                send({ type: 'weather', weather: w })
+                return w ?? { label: '取得できず' }
+              },
+            }),
+            get_last_train: tool({
+              description: 'エリアの終電目安を取得する。1回だけ呼ぶ。',
+              inputSchema: z.object({ area: z.string().describe('エリア名') }),
+              execute: async ({ area }) => {
+                send({ type: 'tool', name: 'get_last_train', args: { area } })
+                const lt = getLastTrain(area)
+                send({ type: 'lasttrain', lastTrain: lt })
+                return lt
+              },
+            }),
+            search_restaurants: tool({
+              description: '飲み会向けのお店を検索する。1回だけ呼ぶ。',
+              inputSchema: SearchInputSchema,
+              execute: async (input) => {
+                send({ type: 'tool', name: 'search_restaurants', args: input })
+                izakaya = await findRestaurants(env, { ...input, limit: 2 })
+                send({ type: 'izakaya', restaurants: izakaya })
+                return { restaurants: izakaya.map((r) => ({ id: r.id, name: r.name })) }
+              },
+            }),
+            get_ramen: tool({
+              description: '〆のラーメンを取得する。1回だけ呼ぶ。',
+              inputSchema: z.object({ count: z.number().nullable().describe('件数 (省略時 1)') }),
+              execute: async () => {
+                send({ type: 'tool', name: 'get_ramen', args: {} })
+                ramen = await getRamenShops(params.area, 1)
+                send({ type: 'ramen', restaurants: ramen })
+                return { restaurants: ramen.map((r) => ({ id: r.id, name: r.name })) }
+              },
+            }),
+            build_plan: tool({
+              description:
+                '集めた店で「1軒目・2軒目・〆」のプランを組む。**4つの取得ツールを呼んだ後、最後に1回だけ**呼ぶ。',
+              inputSchema: PlanSchema,
+              execute: async (plan) => {
+                send({ type: 'controlled', plan })
+                planJson = JSON.stringify(plan)
+                return '組みました'
+              },
+            }),
+          }
+          const result = streamText({
             model,
-            schema: PlanSchema,
+            tools: staticTools,
+            stopWhen: stepCountIs(8),
             providerOptions,
-            prompt: `あなたは既製の「プラン」テンプレに値を流し込む Controlled アシスタントです。
-title と steps[{label,restaurantId,why}] だけ埋めてください (天気/終電は別コンポーネントが出すので不要)。
-提供された全店を使い、label は「1軒目」「2軒目」「〆」。restaurantId は候補の id。why は一言(天気もふまえて)。
+            prompt: `あなたは Static パターンのアシスタントです。ツールを呼んでデータを集め、最後に並びを組みます。
+1. get_weather(date="${params.date}")
+2. get_last_train(area="${params.area}")
+3. search_restaurants(area="${params.area}", query="${dq}"): お店2件
+4. get_ramen(): 〆のラーメン1件
+5. **最後に build_plan を1回だけ**呼ぶ: title と steps[{label,restaurantId,why}]。
+   お店(id が ramen: 以外)を「1軒目」「2軒目」、id が ramen: の店を「〆」。restaurantId は集めた店の id。why は一言(天気もふまえて)。
 ${COMMON}
-${ctx}`,
+条件: ${params.dateLabel}(${params.date}) / ${params.area} / ${params.partySize}人 / 用途:${params.purpose} / 気分:${params.mood || '指定なし'} / 食べたいもの:${params.craving || '指定なし'}`,
           })
-          send({ type: 'controlled', plan: object })
-          metric(usage, JSON.stringify(object))
+          for await (const _ of result.fullStream) {
+            void _
+          }
+          // フォールバック: build_plan を呼ばなかったら集めた店で既定プランを組む
+          if (!planJson) {
+            const all = [...izakaya, ...ramen]
+            const fallback = {
+              title: `${params.area}の${params.purpose}プラン`,
+              steps: all.map((r, i) => ({
+                label: r.id.startsWith('ramen:') ? '〆' : `${i + 1}軒目`,
+                restaurantId: r.id,
+                why: '',
+              })),
+            }
+            send({ type: 'controlled', plan: fallback })
+            planJson = JSON.stringify(fallback)
+          }
+          const usage = await result.totalUsage
+          send({
+            type: 'metrics',
+            ms: Date.now() - started,
+            tokens: usage?.outputTokens ?? usage?.totalTokens ?? 0,
+            chars: planJson.length,
+          })
         } else if (band === 'declarative') {
           const { partialObjectStream, object, usage } = streamObject({
             model,
