@@ -29,7 +29,7 @@
 | 3   | MCP Apps の説明                                                                        | —                                                                                                       |
 | 4   | Generative UI という大きな流れ                                                         | —                                                                                                       |
 | 5   | Spectrum の説明 (Controlled / Declarative / Open-Ended)                                | —                                                                                                       |
-| 6   | **デモを作ってみた**                                                                   | **3 バンドそれぞれで同じ質問を投げ、UI が違うことを見せる**                                             |
+| 6   | **デモを作ってみた**                                                                   | **3 パターンそれぞれで同じ質問を投げ、UI が違うことを見せる**                                           |
 | 7   | **第 4 のパターン「Dynamic」** ⭐                                                      | **同じ題材を Dynamic (Code Mode + Dynamic Worker + JSX SSR) で投げて、先の 3 つを超える表現力を見せる** |
 | 8   | Generative UI のまとめ                                                                 | —                                                                                                       |
 | 9   | 補足: エージェント時代にフォームはなくなる？                                           | **フォームレス登録デモ (Admin で画像 D&D + 自然文 → Vision + Places 正規化 → D1+R2 保存)**              |
@@ -43,11 +43,11 @@
 
 → サブテーマ「フォーム UI は消える」が**メイントピックの中に綺麗に組み込まれる**構成。
 
-### Dynamic バンド (第 4 の追加)
+### Dynamic パターン (第 4 の追加)
 
-CopilotKit の Spectrum は 3 バンドだが、本デモでは **4 つ目「Dynamic」**を提案する位置付け:
+CopilotKit の Spectrum は 3 パターンだが、本デモでは **4 つ目「Dynamic」**を提案する位置付け:
 
-| バンド         | LLM 出力                   | 実装ハイライト                                  |
+| パターン       | LLM 出力                   | 実装ハイライト                                  |
 | -------------- | -------------------------- | ----------------------------------------------- |
 | Controlled     | tool call で props         | 事前定義コンポーネント dispatch                 |
 | Declarative    | JSON UI ツリー             | プリミティブ語彙の再帰描画                      |
@@ -62,7 +62,7 @@ Dynamic は Open-Ended の延長線上だが、LLM が**コードを書く** こ
 
 セクション 7 のクライマックスでこの位置付けを宣言する:
 
-> 「Generative UI Spectrum には 3 つのバンドがあると言われています。でも僕は **4 つ目**を提案します — それが **Dynamic** です。これが LLM が書く SSR、未来の Generative UI の姿です。」
+> 「Generative UI Spectrum には 3 つのパターンがあると言われています。でも僕は **4 つ目**を提案します — それが **Dynamic** です。これが LLM が書く SSR、未来の Generative UI の姿です。」
 
 ### 別フレーミング: 「LLM が書く SSR / JIT SSR」
 
@@ -85,14 +85,14 @@ Dynamic は Open-Ended の延長線上だが、LLM が**コードを書く** こ
 
 ## 中核アイデア (2026-06-01 再構成後)
 
-**4 バンド構成**: Controlled / Declarative / Open-Ended (古典的 3 バンド) に加えて、**第 4 のバンド「Dynamic」** を提案する位置付け。
+**4 パターン構成**: Controlled / Declarative / Open-Ended (古典的 3 パターン) に加えて、**第 4 のパターン「Dynamic」** を提案する位置付け。
 
-- 古典 3 バンドは echo-back ツール (`render_ui` / `render_html`) または直叩き tool で実装、シンプル
+- 古典 3 パターンは echo-back ツール (`render_ui` / `render_html`) または直叩き tool で実装、シンプル
 - **Dynamic は Code Mode + Dynamic Worker + JSX + React** で実装。LLM が書く SSR の実装基盤
 - ModeSelector で 4 つを切り替え可能 (ステージで「同じ質問を 4 モードで投げて比較」できる)
 - Dynamic は内側で更にグラデーションあり: `<RestaurantList />` を借りる ↔ raw な `<div>` で凝る
 
-> 2026-05-31 に一度 ModeSelector 撤去 + Code Mode 一本化を試したが、登壇演出 (「**実は 4 つ目を考えました！**」) の都合で 4 バンド共存に再構成した (2026-06-01)。
+> 2026-05-31 に一度 ModeSelector 撤去 + Code Mode 一本化を試したが、登壇演出 (「**実は 4 つ目を考えました！**」) の都合で 4 パターン共存に再構成した (2026-06-01)。
 
 ### 共有 UI コンポーネント
 
@@ -127,7 +127,7 @@ Dynamic は Open-Ended の延長線上だが、LLM が**コードを書く** こ
 | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Cloudflare 完結** (Vercel/Next.js を使わない)         | 登壇者が Hono 作者。Cloudflare 主軸でデモを組みたい                                                                                                                                                                                      |
 | **Dynamic だけ "コードを書く" 仕様、他は素朴な tool**   | Spectrum を「素朴 → 動的」の階段として見せるため。Controlled/Declarative/Open-Ended は echo back ツールで素朴に、Dynamic だけ worker-bundler + LOADER で「LLM が SSR Worker module を書く」                                              |
-| **4 バンドを ModeSelector で切替可能に**                | 登壇演出「実は 4 つ目を考えました」のため。Dynamic を第 4 のバンドとして他 3 つと並べて見せる                                                                                                                                            |
+| **4 パターンを ModeSelector で切替可能に**              | 登壇演出「実は 4 つ目を考えました」のため。Dynamic を第 4 のパターンとして他 3 つと並べて見せる                                                                                                                                          |
 | **Content-Type で UI 描画を分岐**                       | 擬似 Response `{ contentType, body }` の Content-Type を見て RestaurantList / DeclarativeView / iframe を切り替え                                                                                                                        |
 | **共有コンポーネントを worker-bundler で bundle 同梱**  | LLM が JSX で `<RestaurantList />` を借りられる = Spectrum の「Controlled 端」を表現できる。`src/ui-components.tsx` を `'./restaurant-ui'` で相対 import 可能に                                                                          |
 | **Dynamic は hono-eval パターン**                       | LLM が**完全な Cloudflare Worker module** を書く → `createWorker` でバンドル → `env.LOADER.get` で spawn → `worker.fetch(request)` で実行。codemode 経由ではなく env.LOADER 直叩きで Response を返すため、ガチの「LLM が書く SSR」になる |
@@ -141,7 +141,7 @@ Dynamic は Open-Ended の延長線上だが、LLM が**コードを書く** こ
 
 ## 議論経緯 (時系列)
 
-1. CopilotKit の Generative UI Spectrum (3 バンド) を題材に決定
+1. CopilotKit の Generative UI Spectrum (3 パターン) を題材に決定
 2. テックスタックを Cloudflare Agents SDK + Workers AI + Hono + React に確定
 3. UI 切替方式: タブ vs 会話内モード切替 → 後者 (セグメントコントロール) 採用
 4. 2026-06-06 カンファレンス登壇用と判明 → 安定性・舞台映え・6 日制約を設計に追加
@@ -153,9 +153,9 @@ Dynamic は Open-Ended の延長線上だが、LLM が**コードを書く** こ
 10. README にアーキテクチャ Mermaid 図 (3 つに分割)
 11. Admin 機構: `localStorage` + `env.ADMIN_TOKEN`
 12. (一時的) ModeSelector 撤去、Code Mode 常時 ON、擬似 Response { contentType, body } で UI 分岐に統一
-13. **登壇演出のため 4 バンド構成に戻す** (2026-06-01)
+13. **登壇演出のため 4 パターン構成に戻す** (2026-06-01)
     → Controlled / Declarative / Open-Ended / **Dynamic** を ModeSelector で切替
-    → 古典 3 バンドは echo back ツール (render_ui / render_html) で素朴に実装
+    → 古典 3 パターンは echo back ツール (render_ui / render_html) で素朴に実装
     → Dynamic だけ新世代 (Code Mode + Dynamic Worker + JSX)
 14. **Dynamic を hono-eval パターンに再実装** (2026-06-01)
     → 元々の `@cloudflare/codemode` 経由 → うまく動かない部分があったため
@@ -168,22 +168,22 @@ Dynamic は Open-Ended の延長線上だが、LLM が**コードを書く** こ
 
 ## 現在の実装ステータス
 
-> ⚠️ **2026-06-02 大改修**: 旧「チャット＋ModeSelector」版から **「ご飯アドバイザー」4 バンド比較ビュー** (`src/client/Compare.tsx` のみ) に作り替えた。`agent.ts`(RestaurantAgent/onChatMessage) と `Chat.tsx` は**残置・未使用**。以下は現状の正。
+> ⚠️ **2026-06-02 大改修**: 旧「チャット＋ModeSelector」版から **「ご飯アドバイザー」4 パターン比較ビュー** (`src/client/Compare.tsx` のみ) に作り替えた。`agent.ts`(RestaurantAgent/onChatMessage) と `Chat.tsx` は**残置・未使用**。以下は現状の正。
 
 ### 現状アーキ (要点)
 
 - **2 ペイン UI**: 左=チャット(条件のやりとり)/右=プラン(主役)。中央リサイザーでドラッグ幅調整、モバイルは縦積み。モデル選択は localStorage 記憶。`/gallery` に共有コンポーネント一覧ページ。
-- **フロー**: `/api/intake` (条件抽出・日付/エリア/人数/用途/気分/craving) → 表示中バンドが `/api/band` (`streamBand`) で **毎回「ツールでデータ収集 → 描画」を 1 本の NDJSON で実行**。タブ切替では再実行せず、↻リロードで再生成。
+- **フロー**: `/api/intake` (条件抽出・日付/エリア/人数/用途/気分/craving) → 表示中パターンが `/api/band` (`streamBand`) で **毎回「ツールでデータ収集 → 描画」を 1 本の NDJSON で実行**。タブ切替では再実行せず、↻リロードで再生成。
 - **ツール収集** (`gatherWithTools`): AI エージェントが `get_weather`/`get_last_train`/`search_restaurants`/`get_ramen` を呼んで集める（各 1 回・未呼びはホストがフォールバック）。**Dynamic だけは事前収集しない**（下記）。
-- **4 バンド**:
-  - Controlled = `generateObject(PlanSchema=title+steps)` → `PlanView`。AI は title/steps だけ、天気/終電/店は固定コンポーネント+データ。
-  - Declarative = `streamObject(blocks 語彙: weather/lastTrain/shop)` を選んで並べる → `DeclarativeView`。
-  - Open-Ended = `streamText` で HTML 1 枚 → iframe + CSP。写真は photo_url のみ。
-  - **Dynamic = Code Mode**: AI は `function App({restaurants})` を書くだけ、**`.d.ts`(型)だけ渡し実装は知らせない**。worker スコープに自己完結コンポーネント（`Weather`/`RamenList`=自分で fetch・Suspense、`LastTrain`=静的、`RestaurantCard` 等）を**文字列注入**。お店(Places=要キー)だけホストが prop で渡す＝**鍵の境界**。`/api/dynamic-frame` は POST `{code, restaurants}` を受け SSR。**コード生成と店検索は同一リクエストで並行**。
-- **メトリクス**: 各バンドに「初描画(TTFR・生成開始から)」+「プラン作成(収集+生成の合計: 時間/トークン/文字)」。狙い: Declarative/Dynamic=初描画が速い印象 / Open-Ended=重い / Dynamic=全体最速。
+- **4 パターン** (ラベルは Static/Declarative/Open-Ended/Dynamic。band id は controlled/declarative/open-ended/dynamic):
+  - **Static = 1 フェーズ**: AI は 1 回の `streamText` でデータツール(`get_weather`/`get_last_train`/`search_restaurants`/`get_ramen`)を**呼ぶだけ**。並び・文言には触れず、ホストが固定構成(1軒目/2軒目/〆・テンプレ title)で `PlanView` を描画(= 最も純粋な Controlled、参考実装の「tool-output → component」と同じ)。「ツール」ソースは AI が呼んだツール列そのもの、メトリクスの字数もそのツール列長。
+  - **Declarative = 2 フェーズ**: 収集後、`streamText` で **UIツリー(JSON)** を吐く → host が `validateDeclNode`(Zod)で検証/正規化 → `DeclarativeView` が再帰描画。部品語彙・検証は **Zodカタログ** (`src/schemas/catalog.ts`) が単一の真実源。
+  - **Open-Ended = 2 フェーズ**: `streamText` で HTML 1 枚 → iframe。**多層防御**(① 正規表現サニタイズ ② CSP `connect-src none` + `img-src` を self+ramen-api.dev に絞り画像ビーコンも遮断 ③ sandbox=allow-scripts ④ srcdoc opaque origin)。
+  - **Dynamic = Code Mode**: AI は `function App({restaurants})` を書くだけ、**型宣言(カタログ生成)だけ渡し実装は知らせない**。worker ランタイム(`src/tools/dynamic-runtime.tsx` を `?raw` 埋め込み)に自己完結コンポーネント（`Weather`/`RamenList`=自分で fetch・Suspense、`LastTrain`=静的、`ShopList`/`RamenCard`/`RestaurantCard`=共有部品）。お店(Places=要キー)だけホストが prop で渡す＝**鍵の境界**。`/api/dynamic-frame` は POST `{code, restaurants}` を受け `renderToReadableStream` で Suspense ストリーミング SSR。**コード生成と店検索は同一リクエストで並行**。
+- **メトリクス**: 各パターンに「初描画(TTFR・生成開始から)」+「プラン作成(収集+生成の合計: 時間/トークン/文字)」。狙い: Declarative/Dynamic=初描画が速い印象 / Open-Ended=重い / Dynamic=全体最速。
 - **デザイン**: Kumo の standalone CSS + Button。枠/絵文字/色を抑えたスッキリ系。天気はフラットなニュートラルカード。
 - ✅ Google Places (New) 実接続（`GOOGLE_MAPS_API_KEY` を `.dev.vars`）、写真は `/api/places-photo` プロキシ。天気=Open-Meteo、〆ラーメン=ramen-api.dev（いずれもキー不要）。
-- ✅ `tsc --noEmit` 通過、4 バンド + `/gallery` + モバイルをブラウザで E2E 確認済み。
+- ✅ `tsc --noEmit` 通過、4 パターン + `/gallery` + モバイルをブラウザで E2E 確認済み。
 
 ### 未完了 / 要対応
 
@@ -204,7 +204,7 @@ Dynamic は Open-Ended の延長線上だが、LLM が**コードを書く** こ
 
 ## デモシナリオ (リハーサル基準)
 
-ModeSelector で 4 バンドを切り替えながら、同じ質問「**関内で静かに飲みたい**」を投げて UI の違いを見せる:
+ModeSelector で 4 パターンを切り替えながら、同じ質問「**関内で静かに飲みたい**」を投げて UI の違いを見せる:
 
 1. **Controlled** → search_restaurants だけで RestaurantList カードが並ぶ (シンプル)
 2. **Declarative** → 「静かに過ごせるお店」のセクション + Card プリミティブで整理された UI

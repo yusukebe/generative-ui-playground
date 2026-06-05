@@ -27,6 +27,7 @@ type Metric = { ms: number; tokens: number; chars: number }
 type BandResults = {
   controlled: Plan | null
   controlledRestaurants: Restaurant[] // Static が id 参照する店 (その gather のもの)
+  controlledToolText: string // Static のソース = AI が呼んだツール列 (build_plan 含む)
   declarative: DeclarativeUI | null
   declarativeRestaurants: Restaurant[] // Declarative が id 参照する店 (その gather のもの)
   openEnded: string | null
@@ -42,6 +43,7 @@ type BandResults = {
 const EMPTY_RESULTS: BandResults = {
   controlled: null,
   controlledRestaurants: [],
+  controlledToolText: '',
   declarative: null,
   declarativeRestaurants: [],
   openEnded: null,
@@ -57,7 +59,7 @@ const EMPTY_RESULTS: BandResults = {
 // トグル中央ボタンの表記。AI が「何を」生成するかはパターンで違う (これがスペクトラムの肝)。
 // Static はデータだけ・他は UI そのもの(構造/HTML/コード)を生成する。
 const SOURCE_LABEL: Record<Band, string> = {
-  controlled: 'データ',
+  controlled: 'ツール',
   declarative: 'UIツリー',
   'open-ended': 'HTML',
   dynamic: 'コード',
@@ -65,7 +67,11 @@ const SOURCE_LABEL: Record<Band, string> = {
 
 const BANDS: { id: Band; label: string; desc: string }[] = [
   { id: 'controlled', label: 'Static', desc: 'ツールで集めたデータを固定コンポーネントに流し込む' },
-  { id: 'declarative', label: 'Declarative', desc: 'AI が部品を JSON の UIツリーに組み、host が再帰描画する' },
+  {
+    id: 'declarative',
+    label: 'Declarative',
+    desc: 'AI が部品を JSON の UIツリーに組み、host が再帰描画する',
+  },
   { id: 'open-ended', label: 'Open-Ended', desc: 'AI が HTML でプラン1枚をフル生成' },
   { id: 'dynamic', label: 'Dynamic ✨', desc: 'AI が React を書き Worker が Suspense SSR' },
 ]
@@ -107,8 +113,8 @@ export function Compare() {
   }, [model])
   const [input, setInput] = useState('')
   const [convo, setConvo] = useState<Turn[]>([])
-  // 生成UI(プレビュー) / AI が書いたソース / 両方を横並び のどれを見せるか
-  const [panelView, setPanelView] = useState<'preview' | 'source' | 'split'>('split')
+  // 生成UI(プレビュー) / AI が書いたソース / 両方を横並び のどれを見せるか (既定=プレビュー)
+  const [panelView, setPanelView] = useState<'preview' | 'source' | 'split'>('preview')
   const [intaking, setIntaking] = useState(false)
   const [params, setParams] = useState<PlanParams | null>(null)
   const [weather, setWeather] = useState<Weather>(null)
@@ -124,6 +130,7 @@ export function Compare() {
   const chatLogRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const [chatWidth, setChatWidth] = useState(340)
+  const [chatHidden, setChatHidden] = useState(false) // 左チャットを完全に隠す(登壇で生成UIを最大化)
   const genStartRef = useRef<Partial<Record<Band, number>>>({})
 
   // 中央のリサイザー: ドラッグでチャット(左)幅を調整
@@ -199,7 +206,11 @@ export function Compare() {
     setRestaurants([])
     setResults((r) => ({
       ...r,
-      ...(b === 'controlled' && { controlled: null, controlledRestaurants: [] }),
+      ...(b === 'controlled' && {
+        controlled: null,
+        controlledRestaurants: [],
+        controlledToolText: '',
+      }),
       ...(b === 'declarative' && { declarative: null, declarativeRestaurants: [] }),
       ...(b === 'open-ended' && { openEnded: null }),
       ...(b === 'dynamic' && { dynamicCode: '', dynamicReady: false, dynamicRestaurants: [] }),
@@ -280,6 +291,9 @@ export function Compare() {
           if (ev.restaurants) s.controlledRestaurants = ev.restaurants as Restaurant[]
           if (ev.error) s.status = { ...s.status, controlled: 'error' }
           else markFirst()
+          break
+        case 'controlled-source':
+          s.controlledToolText = (ev.source as string) ?? ''
           break
         case 'declarative':
           s.declarative = (ev.ui as DeclarativeUI) ?? s.declarative
@@ -363,6 +377,19 @@ export function Compare() {
     <div className='advisor'>
       <header className='advisor__header'>
         <span className='chat__title'>ご飯アドバイザー 🍻</span>
+        <button
+          type='button'
+          className='chat-toggle'
+          data-hidden={chatHidden}
+          onClick={() => setChatHidden((h) => !h)}
+          title={chatHidden ? 'チャットを表示' : 'チャットを隠す'}
+          aria-label={chatHidden ? 'チャットを表示' : 'チャットを隠す'}
+        >
+          <span className='chat-toggle__icon' />
+        </button>
+        <Button type='button' variant='ghost' size='sm' onClick={clear} title='クリア'>
+          Clear
+        </Button>
         <div className='chat__header-right'>
           <ModelSelector value={model} onChange={setModel} />
           <Button
@@ -374,9 +401,6 @@ export function Compare() {
           >
             🧩 部品
           </Button>
-          <Button type='button' variant='ghost' size='sm' onClick={clear} title='クリア'>
-            Clear
-          </Button>
           <span className='chat__status' data-status={intaking ? 'streaming' : 'ready'}>
             {intaking ? 'THINKING' : 'READY'}
           </span>
@@ -384,88 +408,97 @@ export function Compare() {
       </header>
 
       <div className='advisor__body' ref={bodyRef}>
-        {/* 左: チャット (条件のやりとり) */}
-        <aside className='advisor__chat' style={{ width: chatWidth }}>
-          <div className='advisor__log' ref={chatLogRef}>
-            {convo.length === 0 && (
-              <div className='advisor__intro'>
-                <div className='compare__empty-icon'>🌃</div>
-                <p className='advisor__intro-lead'>札幌・横浜の夜のご飯プランを作ります 🍶</p>
-                <p className='advisor__intro-sub'>
-                  日付・エリア・人数・用途を一言で。「すすきので海鮮」「関内でもつ」のように
-                  <strong>食べたいもの</strong>を添えてもOK。条件が足りなければ AI が聞き返します。
-                </p>
-                <div className='compare__samples'>
-                  {SAMPLES.map((q) => (
-                    <Button
-                      key={q}
-                      type='button'
-                      variant='outline'
-                      size='sm'
-                      onClick={() => submit(q)}
-                    >
-                      {q}
-                    </Button>
-                  ))}
+        {/* 左: チャット (条件のやりとり)。chatHidden で完全に隠せる */}
+        {!chatHidden && (
+          <aside className='advisor__chat' style={{ width: chatWidth }}>
+            <div className='advisor__log' ref={chatLogRef}>
+              {convo.length === 0 && (
+                <div className='advisor__intro'>
+                  <div className='compare__empty-icon'>🌃</div>
+                  <p className='advisor__intro-lead'>札幌・横浜の夜のご飯プランを作ります 🍶</p>
+                  <p className='advisor__intro-sub'>
+                    日付・エリア・人数・用途を一言で。「すすきので海鮮」「関内でもつ」のように
+                    <strong>食べたいもの</strong>を添えてもOK。条件が足りなければ AI
+                    が聞き返します。
+                  </p>
+                  <div className='compare__samples'>
+                    {SAMPLES.map((q) => (
+                      <Button
+                        key={q}
+                        type='button'
+                        variant='outline'
+                        size='sm'
+                        onClick={() => submit(q)}
+                      >
+                        {q}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {convo.map((t, i) => (
-              <div key={i} className='message' data-role={t.role === 'user' ? 'user' : 'assistant'}>
-                <div className='message__role'>{t.role === 'user' ? 'あなた' : 'AI'}</div>
-                <div className='message__body'>{t.text}</div>
-              </div>
-            ))}
-            {intaking && (
-              <div className='thinking-indicator'>
-                <span className='thinking-indicator__dots'>
-                  <span />
-                  <span />
-                  <span />
-                </span>
-                <span className='thinking-indicator__label'>条件を整理中…</span>
-              </div>
-            )}
-            {error && <div className='tool-error'>{error}</div>}
-          </div>
-
-          <form
-            className='chat__form'
-            onSubmit={(e) => {
-              e.preventDefault()
-              submit(input)
-            }}
-          >
-            <div className='chat__input-row'>
-              <input
-                type='text'
-                className='chat__input'
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value)
-                  if (historyIndex !== -1) setHistoryIndex(-1)
-                }}
-                onKeyDown={handleKeyDown}
-                placeholder='例: すすきので金曜、4人で接待'
-                autoComplete='off'
-                autoFocus
-              />
-              <Button type='submit' variant='primary' loading={intaking} disabled={!input.trim()}>
-                送信
-              </Button>
+              {convo.map((t, i) => (
+                <div
+                  key={i}
+                  className='message'
+                  data-role={t.role === 'user' ? 'user' : 'assistant'}
+                >
+                  <div className='message__role'>{t.role === 'user' ? 'あなた' : 'AI'}</div>
+                  <div className='message__body'>{t.text}</div>
+                </div>
+              ))}
+              {intaking && (
+                <div className='thinking-indicator'>
+                  <span className='thinking-indicator__dots'>
+                    <span />
+                    <span />
+                    <span />
+                  </span>
+                  <span className='thinking-indicator__label'>条件を整理中…</span>
+                </div>
+              )}
+              {error && <div className='tool-error'>{error}</div>}
             </div>
-          </form>
-        </aside>
 
-        {/* ドラッグで左右の幅を調整 */}
-        <div
-          className='advisor__resizer'
-          onMouseDown={startResize}
-          role='separator'
-          aria-orientation='vertical'
-          title='ドラッグで幅を調整'
-        />
+            <form
+              className='chat__form'
+              onSubmit={(e) => {
+                e.preventDefault()
+                submit(input)
+              }}
+            >
+              <div className='chat__input-row'>
+                <input
+                  type='text'
+                  className='chat__input'
+                  value={input}
+                  onChange={(e) => {
+                    setInput(e.target.value)
+                    if (historyIndex !== -1) setHistoryIndex(-1)
+                  }}
+                  onKeyDown={handleKeyDown}
+                  placeholder='例: すすきので金曜、4人で接待'
+                  autoComplete='off'
+                  autoFocus
+                />
+                <Button type='submit' variant='primary' loading={intaking} disabled={!input.trim()}>
+                  送信
+                </Button>
+              </div>
+            </form>
+          </aside>
+        )}
+
+        {/* ドラッグで左右の幅を調整 (チャット表示時のみ) */}
+        {!chatHidden && (
+          <div
+            className='advisor__resizer'
+            onMouseDown={startResize}
+            role='separator'
+            aria-orientation='vertical'
+            title='ドラッグで幅を調整'
+          />
+        )}
 
         {/* 右: プラン (主役) */}
         <main className='advisor__plan' ref={compareRef}>
@@ -550,6 +583,7 @@ export function Compare() {
                 restaurants={restaurants}
                 weather={weather}
                 lastTrain={lastTrain}
+                params={params}
               />
             </>
           )}
@@ -567,6 +601,7 @@ function BandPanel({
   restaurants,
   weather,
   lastTrain,
+  params,
 }: {
   band: Band
   view: 'preview' | 'source' | 'split'
@@ -575,6 +610,7 @@ function BandPanel({
   restaurants: Restaurant[]
   weather: Weather
   lastTrain: LastTrain
+  params: PlanParams | null
 }) {
   const status = results.status[band]
   // 2フェーズ(D/OE)の収集フェーズ中はプレビューに「データ収集中」を出す
@@ -594,12 +630,16 @@ function BandPanel({
           restaurants={
             results.controlledRestaurants.length ? results.controlledRestaurants : restaurants
           }
+          title={params ? `${params.area}の夜のプラン` : undefined}
           weather={weather}
           lastTrain={lastTrain}
         />
       )
-    script = results.controlled ? JSON.stringify(results.controlled, null, 2) : ''
-    scriptLabel = 'AI が埋めたのは title と steps だけ (天気/終電/店は固定コンポーネント+データ)'
+    script =
+      results.controlledToolText ||
+      (results.controlled ? JSON.stringify(results.controlled, null, 2) : '')
+    scriptLabel =
+      '🛠 AI が呼んだツールだけ (Static はこれが全部。UI はホストが固定コンポーネントで描画)'
   } else if (band === 'declarative') {
     preview = results.declarative ? (
       <DeclarativeView

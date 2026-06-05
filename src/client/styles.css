@@ -142,7 +142,6 @@ body,
   flex-wrap: wrap;
 }
 .chat__title {
-  margin-right: auto;
   font-weight: 600;
   font-size: 16px;
   white-space: nowrap;
@@ -152,6 +151,7 @@ body,
   display: flex;
   align-items: center;
   gap: 12px;
+  margin-left: auto;
 }
 .chat__status {
   font-size: 11px;
@@ -1041,6 +1041,52 @@ body,
   gap: 12px 16px;
   flex-wrap: wrap;
 }
+
+/* 左チャットの開閉トグル (サイドバー風アイコン)。ヘッダー左端に置く */
+.chat-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  border-radius: 9px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+.chat-toggle:hover {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+.chat-toggle__icon {
+  position: relative;
+  width: 16px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+/* 左側の「ペイン」を表す塗り。表示中は塗り、隠すと薄くなる */
+.chat-toggle__icon::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: currentColor;
+  border-radius: 1.5px 0 0 1.5px;
+  transition: opacity 0.15s;
+}
+.chat-toggle[data-hidden='true'] .chat-toggle__icon::before {
+  opacity: 0.2;
+}
 .advisor__body {
   flex: 1;
   display: flex;
@@ -1641,7 +1687,12 @@ body,
   width: 220px;
   max-width: 70%;
   border-radius: 6px;
-  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface) 50%, var(--surface-2) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    var(--surface) 50%,
+    var(--surface-2) 75%
+  );
   background-size: 200% 100%;
   animation: rc-shimmer 1.2s infinite;
 }

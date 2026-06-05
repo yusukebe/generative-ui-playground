@@ -24,11 +24,13 @@ const SCAFFOLD_LABELS = ['1軒目', '2軒目', '〆']
 export function PlanView({
   plan,
   restaurants,
+  title,
   weather = null,
   lastTrain = null,
 }: {
   plan: Plan | null
   restaurants: Restaurant[]
+  title?: string // ホスト固定のタイトル(即表示。gather/plan を待たない)
   weather?: WeatherInfo
   lastTrain?: LastTrainInfo
 }) {
@@ -42,7 +44,8 @@ export function PlanView({
       }))
   return (
     <div className='plan'>
-      {plan?.title ? <h3 className='plan__title'>{plan.title}</h3> : <div className='plan__title-skeleton' />}
+      {/* タイトルはホスト固定なので即表示 (LLM/gather を待たない) */}
+      {title && <h3 className='plan__title'>{title}</h3>}
 
       {weather ? <WeatherBanner weather={weather} /> : <WeatherBannerSkeleton />}
       {lastTrain ? <LastTrainCard lastTrain={lastTrain} /> : <LastTrainCardSkeleton />}

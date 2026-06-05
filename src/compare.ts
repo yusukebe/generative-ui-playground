@@ -8,17 +8,12 @@
  *   Open-Ended  — HTML でプラン1枚
  *   Dynamic     — React コードでプラン → /api/dynamic-frame で Suspense SSR
  */
-import {
-  generateObject,
-  stepCountIs,
-  streamText,
-  tool,
-  type LanguageModelUsage,
-} from 'ai'
+import { generateObject, stepCountIs, streamText, tool, type LanguageModelUsage } from 'ai'
 import { z } from 'zod'
 import { resolveModel } from './llm'
 import type { ModelId } from './models'
-import { IntakeSchema, PlanSchema, type IntakeResult, type PlanParams } from './schemas/plan'
+import { IntakeSchema, type IntakeResult, type PlanParams } from './schemas/plan'
+import { declarativeCatalogText, dynamicCatalogText, validateDeclNode } from './schemas/catalog'
 import { getLastTrain, type LastTrain } from './tools/lasttrain'
 import { getRamenShops } from './tools/ramen'
 import { findRestaurants, SearchInputSchema } from './tools/search-restaurants'
@@ -31,7 +26,9 @@ export type Band = 'controlled' | 'declarative' | 'open-ended' | 'dynamic'
 function todayContext(): string {
   const now = new Date()
   const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(now)
-  const wd = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', weekday: 'long' }).format(now)
+  const wd = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', weekday: 'long' }).format(
+    now
+  )
   return `${date} (${wd})`
 }
 
@@ -152,8 +149,11 @@ async function gatherWithTools(
       },
     }),
     get_last_train: tool({
-      description: '指定エリアの終電目安(最寄り駅・終電時刻・店を出る目安)を取得する。1回だけ呼ぶ。',
-      inputSchema: z.object({ area: z.string().describe('エリア名 (例: 関内, 野毛, みなとみらい)') }),
+      description:
+        '指定エリアの終電目安(最寄り駅・終電時刻・店を出る目安)を取得する。1回だけ呼ぶ。',
+      inputSchema: z.object({
+        area: z.string().describe('エリア名 (例: 関内, 野毛, みなとみらい)'),
+      }),
       execute: async ({ area }) => {
         if (gotTrain) return lastTrainData
         gotTrain = true
@@ -347,14 +347,21 @@ export function streamBand(
           // 並びは build_plan ツールで組む(参考デモの generateItinerary に相当)。generateObject は使わない。
           let izakaya: Restaurant[] = []
           let ramen: Restaurant[] = []
-          let planJson = ''
-          const dq = [params.craving, params.purpose, params.mood].filter(Boolean).join(' ') || 'おすすめ'
+          // Static で AI がやったこと = ツールコール列そのもの。ソース表示と字数メトリクスに使う
+          // (build_plan も含めて「AI はツールを呼んだだけ」を正直に見せる)。
+          const toolLog: { name: string; args: unknown }[] = []
+          const logTool = (name: string, args: unknown) => {
+            toolLog.push({ name, args })
+            send({ type: 'tool', name, args })
+          }
+          const dq =
+            [params.craving, params.purpose, params.mood].filter(Boolean).join(' ') || 'おすすめ'
           const staticTools = {
             get_weather: tool({
               description: '対象エリアの天気を取得する。1回だけ呼ぶ。',
               inputSchema: z.object({ date: z.string().describe('対象日 YYYY-MM-DD') }),
               execute: async ({ date }) => {
-                send({ type: 'tool', name: 'get_weather', args: { date } })
+                logTool('get_weather', { date })
                 const w = await getWeather(date, params.area)
                 send({ type: 'weather', weather: w })
                 return w ?? { label: '取得できず' }
@@ -364,7 +371,7 @@ export function streamBand(
               description: 'エリアの終電目安を取得する。1回だけ呼ぶ。',
               inputSchema: z.object({ area: z.string().describe('エリア名') }),
               execute: async ({ area }) => {
-                send({ type: 'tool', name: 'get_last_train', args: { area } })
+                logTool('get_last_train', { area })
                 const lt = getLastTrain(area)
                 send({ type: 'lasttrain', lastTrain: lt })
                 return lt
@@ -374,7 +381,7 @@ export function streamBand(
               description: '飲み会向けのお店を検索する。1回だけ呼ぶ。',
               inputSchema: SearchInputSchema,
               execute: async (input) => {
-                send({ type: 'tool', name: 'search_restaurants', args: input })
+                logTool('search_restaurants', input)
                 izakaya = await findRestaurants(env, { ...input, limit: 2 })
                 send({ type: 'izakaya', restaurants: izakaya })
                 return { restaurants: izakaya.map((r) => ({ id: r.id, name: r.name })) }
@@ -384,20 +391,10 @@ export function streamBand(
               description: '〆のラーメンを取得する。1回だけ呼ぶ。',
               inputSchema: z.object({ count: z.number().nullable().describe('件数 (省略時 1)') }),
               execute: async () => {
-                send({ type: 'tool', name: 'get_ramen', args: {} })
+                logTool('get_ramen', {})
                 ramen = await getRamenShops(params.area, 1)
                 send({ type: 'ramen', restaurants: ramen })
                 return { restaurants: ramen.map((r) => ({ id: r.id, name: r.name })) }
-              },
-            }),
-            build_plan: tool({
-              description:
-                '集めた店で「1軒目・2軒目・〆」のプランを組む。**4つの取得ツールを呼んだ後、最後に1回だけ**呼ぶ。',
-              inputSchema: PlanSchema,
-              execute: async (plan) => {
-                send({ type: 'controlled', plan, restaurants: [...izakaya, ...ramen] })
-                planJson = JSON.stringify(plan)
-                return '組みました'
               },
             }),
           }
@@ -406,39 +403,41 @@ export function streamBand(
             tools: staticTools,
             stopWhen: stepCountIs(8),
             providerOptions,
-            prompt: `あなたは Static パターンのアシスタントです。ツールを呼んでデータを集め、最後に並びを組みます。
+            prompt: `あなたは Static パターンのアシスタントです。**ツールを呼んでデータを集めるだけ**です。
+並び順・レイアウト・文言はあなたが作る必要はありません(ホストが固定コンポーネントで描画します)。
+次の4つを呼んだら終わりです:
 1. get_weather(date="${params.date}")
 2. get_last_train(area="${params.area}")
 3. search_restaurants(area="${params.area}", query="${dq}"): お店2件
 4. get_ramen(): 〆のラーメン1件
-5. **最後に build_plan を1回だけ**呼ぶ: title と steps[{label,restaurantId,why}]。
-   お店(id が ramen: 以外)を「1軒目」「2軒目」、id が ramen: の店を「〆」。restaurantId は集めた店の id。why は一言(天気もふまえて)。
 ${COMMON}
 条件: ${params.dateLabel}(${params.date}) / ${params.area} / ${params.partySize}人 / 用途:${params.purpose} / 気分:${params.mood || '指定なし'} / 食べたいもの:${params.craving || '指定なし'}`,
           })
           for await (const _ of result.fullStream) {
             void _
           }
-          // フォールバック: build_plan を呼ばなかったら集めた店で既定プランを組む
-          if (!planJson) {
-            const all = [...izakaya, ...ramen]
-            const fallback = {
-              title: `${params.area}の${params.purpose}プラン`,
-              steps: all.map((r, i) => ({
-                label: r.id.startsWith('ramen:') ? '〆' : `${i + 1}軒目`,
-                restaurantId: r.id,
-                why: '',
-              })),
-            }
-            send({ type: 'controlled', plan: fallback, restaurants: all })
-            planJson = JSON.stringify(fallback)
+          // 並びはホストが固定で組む (AI は触らない = 純粋な Controlled)。
+          // title はクライアントが params から即描画するのでここでは送らない。
+          const all = [...izakaya, ...ramen]
+          const plan = {
+            steps: all.map((r, i) => ({
+              label: r.id.startsWith('ramen:') ? '〆' : `${i + 1}軒目`,
+              restaurantId: r.id,
+            })),
           }
+          send({ type: 'controlled', plan, restaurants: all })
+          // Static の「ソース」= AI が呼んだツール列(これが Static で AI がやったこと全部)。
+          // 字数メトリクスもこの全体長で測る。
+          const toolText = toolLog
+            .map((t) => `${t.name}(${JSON.stringify(t.args, null, 2)})`)
+            .join('\n\n')
+          send({ type: 'controlled-source', source: toolText })
           const usage = await result.totalUsage
           send({
             type: 'metrics',
             ms: Date.now() - started,
             tokens: usage?.outputTokens ?? usage?.totalTokens ?? 0,
-            chars: planJson.length,
+            chars: toolText.length,
           })
         } else if (band === 'declarative') {
           // Declarative = AI が UIツリー(JSON)を組む。レイアウト(Stack/Grid)・並び・位置を自分で決める。
@@ -450,12 +449,7 @@ ${COMMON}
 どの部品を、どの順で並べるかはあなたが決めます (ブロックの構成があなたの仕事)。
 
 # 使える部品 (type ごとに props が違う)
-- Stack    { gap?: 2|3|4|6 }                  縦並びコンテナ。children に子ノード
-- Heading  { content: string, level?: 2|3 }    見出し
-- Text     { content: string }                 説明文
-- Weather  {}                                  天気バナー (データはホストが持つ)
-- LastTrain{}                                  終電案内 (データはホストが持つ)
-- ShopList {}                                  店一覧。**1軒目/2軒目の横並びと〆ラーメンの配置は ShopList が中でやる**ので、あなたは置く位置を決めるだけ (個々の店の配置は考えなくてよい)
+${declarativeCatalogText()}
 
 # 出力形式 (これだけ)
 入れ子の JSON を1つ。各ノードは { "type": "...", "props": {...}, "children": [ ...子ノード... ] }。
@@ -471,23 +465,26 @@ ${ctx}`,
             void _
           }
           const raw = await text
-          let tree: unknown
-          try {
-            tree = JSON.parse(stripFence(raw))
-          } catch {
-            // パース失敗時は最低限のフォールバックツリー (Stack に weather/終電/店一覧を並べる)
-            tree = {
-              type: 'Stack',
-              props: { gap: 4 },
-              children: [
-                { type: 'Weather', props: {} },
-                { type: 'LastTrain', props: {} },
-                { type: 'ShopList', props: {} },
-              ],
-            }
+          // 最低限のフォールバックツリー (Stack に weather/終電/店一覧を並べる)
+          const fallbackTree = {
+            type: 'Stack',
+            props: { gap: 4 },
+            children: [
+              { type: 'Weather', props: {} },
+              { type: 'LastTrain', props: {} },
+              { type: 'ShopList', props: {} },
+            ],
           }
+          let parsed: unknown
+          try {
+            parsed = JSON.parse(stripFence(raw))
+          } catch {
+            parsed = fallbackTree
+          }
+          // カタログ(Zod)でツリーを検証/正規化。壊れていればフォールバック。
+          const tree = validateDeclNode(parsed) ?? fallbackTree
           // ツリーは自分の gather の id を参照するので、その restaurants を同梱して渡す
-          // (クライアント側の共有 state は別バンドの gather で上書きされ得るため)
+          // (クライアント側の共有 state は別パターンの gather で上書きされ得るため)
           send({ type: 'declarative', ui: tree, restaurants })
           metric(await usage, JSON.stringify(tree))
         } else if (band === 'open-ended') {
@@ -528,15 +525,7 @@ ${ctxPhotos}`,
 
 # 使える API (型定義だけ渡します。実装は Worker 側にあり、**あなたは中身を知る必要はありません**)
 \`\`\`ts
-type Restaurant = { id: string; name: string; area: string; genre: string; tags: string[]; note: string | null; price_range: string | null; photo_url?: string | null }
-// 非同期コンポーネント (内部で自分で fetch する。**必ず <Suspense fallback={...}> で包む**)
-declare const Weather:   React.FC<{ date: string; area?: string }>  // 天気バナー (自分で天気を取得)
-declare const RamenList: React.FC<{ count?: number; area?: string }>  // 〆ラーメン一覧 (自分で一覧+各店を取得)
-// 同期コンポーネント (即描画)
-declare const LastTrain:      React.FC<{ area: string }>                  // 終電案内
-declare const RestaurantCard: React.FC<{ restaurant: Restaurant }>        // お店カード1枚
-declare const RestaurantList: React.FC<{ restaurants: Restaurant[] }>     // お店一覧(均一グリッド)
-declare const ShopList:       React.FC<{ items: Restaurant[] }>           // 店一覧。1軒目/2軒目の横並び・ラベルを部品が自動配置 (個々の並びを考えなくてよい)
+${dynamicCatalogText()}
 declare const CardSkeleton:    React.FC  // ローディング(カード高さ・〆ラーメン用)
 declare const WeatherSkeleton: React.FC  // ローディング(バナー高さ・天気用)
 \`\`\`

@@ -1,19 +1,42 @@
-# Generative UI Playground
+# Generative UI Playground — ご飯アドバイザー 🍻
 
-CopilotKit が提唱する [**Generative UI Spectrum**](https://www.copilotkit.ai/generative-ui-spectrum) (Controlled / Declarative / Open-Ended) の 3 バンドを実演しつつ、本デモが提案する **第 4 のバンド「Dynamic」** (Code Mode + Dynamic Worker + JSX SSR) も見せるレストラン提案アプリ。
+CopilotKit が提唱する [**Generative UI Spectrum**](https://www.copilotkit.ai/generative-ui-spectrum) の 3 パターン (Static / Declarative / Open-Ended) を実演しつつ、本デモが提案する **第 4 のパターン「Dynamic」** (Code Mode + Cloudflare Worker Loader で LLM のコードを SSR) も見せる、**同じ条件のご飯プランを 4 パターンで描き分ける**比較デモ。
 
 2026-06-06 [frontend-phpcon-do-2026](https://fortee.jp/frontend-phpcon-do-2026/proposal/3435cc2a-90b6-4f28-8394-1d0665001020) トーク「AI 時代の UI はどこへ行く？その 2！」用。
 
-## 4 つのバンド
+左のチャットに「すすきので金曜、4 人で接待」のように一言入れると、右に **Static / Declarative / Open-Ended / Dynamic** の 4 タブで同じプランが描き分けられる。各タブは **プレビュー / ソース / 両方** を切り替えられ、「AI が生成したもの (ソース) → どう描画されるか (プレビュー)」を並べて見せられる。
 
-| バンド          | LLM 出力                                            | 描画                                                                |
-| --------------- | --------------------------------------------------- | ------------------------------------------------------------------- |
-| **Controlled**  | tool call `search_restaurants`                      | 事前定義 React コンポーネント (`RestaurantList`) で dispatch        |
-| **Declarative** | tool call `render_ui` (JSON UI ツリー)              | プリミティブ語彙 (Section / Card) を再帰描画                        |
-| **Open-Ended**  | tool call `render_html` (HTML 文字列)               | `<iframe sandbox>` + CSP で実行                                     |
-| **Dynamic** ✨  | tool call `dynamic_render` (**JSX で動的にコード**) | **Cloudflare Dynamic Worker で SSR**、`<RestaurantList />` も借用可 |
+## 4 つのパターン
 
-並走サブテーマ: **「フォーム UI は消える」** — レストラン登録は専用フォームではなく、チャット入力 + 写真 DnD で行い、LLM が曖昧な自然言語入力を Workers AI Vision で正規化する。
+| パターン        | AI が生成するもの                 | 誰がデータ取得                    | 誰がレイアウト        | 描画                                |
+| --------------- | --------------------------------- | --------------------------------- | --------------------- | ----------------------------------- |
+| **Static**      | **ツールコールのみ** (UIに非関与) | ホスト (ツール)                   | ホスト (固定)         | フロント React (固定コンポーネント) |
+| **Declarative** | **UIツリー** (JSON)               | ホスト (ツール)                   | **AI** (ツリー)       | フロント React (ツリーを再帰描画)   |
+| **Open-Ended**  | **HTML** 文書全体                 | ホスト (ツール)                   | **AI** (HTML)         | iframe (sandbox + CSP + サニタイズ) |
+| **Dynamic** ✨  | **React コード**                  | **コンポーネント自身** (Suspense) | **AI** (本物のコード) | Cloudflare Worker で SSR → iframe   |
+
+スペクトラムの肝は **「AI に UI のどこまでを書かせるか」**。右に行くほど AI の自由度が上がる (データだけ → ツリー → HTML → コード)。各パターンの「ソース」トグルを見ると、AI がそのパターンで何を生成しているかが一目で分かる。
+
+### 1 フェーズ vs 2 フェーズ
+
+- **Static は 1 フェーズ**: AI は 1 回の `streamText` でデータツール (`get_weather` / `get_last_train` / `search_restaurants` / `get_ramen`) を**呼ぶだけ**。並び・レイアウト・文言には触れず、ホストが固定コンポーネントで描画する (= 最も純粋な Controlled)。「ツール」トグルで AI が呼んだツール列がそのまま見える。
+- **Declarative / Open-Ended は 2 フェーズ**: ① ツールでデータ収集 → ② 集めたデータを使って UIツリー / HTML を生成。
+- **Dynamic は事前収集しない**: AI はコンポーネントを組むだけ。天気・〆ラーメンは描画時にコンポーネントが `<Suspense>` で自分で fetch する。
+
+## 単一の真実源: Zod カタログ
+
+UI 部品の「契約」(各部品が受け付ける props) は [`src/schemas/catalog.ts`](./src/schemas/catalog.ts) に **Zod で 1 か所だけ**定義する (参考デモ [旅行プランナー](https://zenn.dev/peintangos/articles/5b6e952c4e8880) の json-render catalog と同じ発想)。ここから:
+
+- **Declarative**: プロンプトの「使える部品」リストを生成 + AI が吐いた JSON ツリーを Zod で検証/正規化
+- **Dynamic**: プロンプトの `declare const X: React.FC<{...}>` 型宣言を `z.toJSONSchema()` 経由で生成
+
+を導出する。プロンプト・型・検証を手書きで 3 か所に分散させない。同じ部品名でも Declarative (ホストがデータ注入) と Dynamic (AI が props で配線) で props が違うので、エントリは `declarative` / `dynamic` を別々に持つ。
+
+## 共有コンポーネント
+
+[`src/ui-components.tsx`](./src/ui-components.tsx) の `ShopList` / `RamenCard` / `WeatherBanner` / `LastTrainCard` / `RestaurantCard` を **全パターンで共有**する (Dynamic Worker へは `?raw` でソースを埋め込み)。
+
+特に **`ShopList`** がレイアウトを所有する: 店の配列を渡すと「1 軒目 / 2 軒目を横並びグリッド・〆ラーメンを専用カードで下に」を**部品の中で**やる。これにより「2 枚を Grid・1 枚を下」のような配置をホストや AI が考えなくてよい (旅行プランナーの `ItineraryTimeline` と同じく、部品が中の並びを持つ)。
 
 ## 「Dynamic」というクライマックス
 
@@ -21,248 +44,144 @@ CopilotKit が提唱する [**Generative UI Spectrum**](https://www.copilotkit.a
 通常の SSR (Next.js / Remix):
   開発者が書いた React コンポーネント → サーバで renderToString → HTML
 
-このデモの Dynamic バンド:
-  LLM が書いた React コンポーネント → Dynamic Worker で renderToString → HTML
-            ↑ リクエスト時に動的生成 (JIT)
+このデモの Dynamic パターン:
+  LLM が書いた React コンポーネント → Cloudflare Worker で renderToReadableStream → HTML
+            ↑ リクエスト時に動的バンドル & スピンアップ (JIT)
 ```
 
 つまり Dynamic は **「LLM が書く SSR」**。Open-Ended の延長線上だが:
 
-- サンドボックス隔離が標準で付く (Cloudflare Worker Loader)
-- React 環境 (renderToString) が走る
-- 既存コンポーネントを **借用できる** (Spectrum を内側でグラデーションできる)
+- サンドボックス隔離が標準で付く (Cloudflare [Worker Loader](https://developers.cloudflare.com/workers/runtime-apis/bindings/worker-loader/))
+- React 環境 (`renderToReadableStream` で Suspense ストリーミング SSR) が走る
+- **型付きの実コンポーネントを借用できる** (`ShopList` / `RamenList` 等)。しかも非同期コンポーネントは描画時に自分でデータを取りに行く
 
-「Code Mode + Dynamic Worker = LLM SSR の実装基盤」。Spectrum 議論はこの上に乗る枝葉、というフレームでもある。
+「Code Mode + Worker Loader = LLM SSR の実装基盤」。Spectrum 議論はこの上に乗る枝葉、というフレームでもある。
 
 ## Tech Stack
 
-- Cloudflare Workers + [Hono](https://hono.dev/) + [hono-agents](https://www.npmjs.com/package/hono-agents)
-- React 19 + Vite
-- [Cloudflare Agents SDK](https://developers.cloudflare.com/agents/) (Durable Object として Agent を保持)
-- [@cloudflare/worker-bundler](https://www.npmjs.com/package/@cloudflare/worker-bundler) + [Worker Loader](https://developers.cloudflare.com/workers/runtime-apis/bindings/worker-loader/) (Dynamic バンドで LLM の Worker module を runtime バンドル → spawn → fetch)
-- Workers AI (Llama 4 Scout / Llama 3.3 70B fp8 fast / Llama 3.1 8B / Gemma 3 / Qwen 2.5 Coder)
-- D1 (レストラン) + R2 (写真)
+- Cloudflare Workers + [Hono](https://hono.dev/) + React 19 SPA + [Vite](https://vite.dev/)
+- [Vercel AI SDK v6](https://sdk.vercel.ai/) (`streamText` / `tool` / `stepCountIs`) + [`@ai-sdk/openai`](https://www.npmjs.com/package/@ai-sdk/openai) + [`workers-ai-provider`](https://www.npmjs.com/package/workers-ai-provider)
+- [Worker Loader](https://developers.cloudflare.com/workers/runtime-apis/bindings/worker-loader/) + worker-bundler (Dynamic で LLM の Worker module を runtime バンドル → spawn → fetch、[hono-eval](https://github.com/yusukebe/hono-eval) と同じパターン)
+- モデル: **GPT-4o** (既定) / GPT-4o mini / GPT-OSS 120B / Llama 3.3 70B / Llama 4 Scout / Llama 3.1 8B / Gemma 3 12B / Qwen 2.5 Coder (ドロップダウンで切替)
+- データ: [Google Places (New)](https://developers.google.com/maps/documentation/places/web-service/op-overview) (店 + 写真 · 要 `GOOGLE_MAPS_API_KEY`) / [Open-Meteo](https://open-meteo.com/) (天気 · キー不要) / [ramen-api.dev](https://ramen-api.dev) (〆ラーメン · キー不要) / 終電は静的テーブル
 
 ## 開発
 
 ```bash
-bun install
-bun run dev               # http://localhost:5173/
-bun run db:migrate:local  # D1 マイグレーション + シード (横浜 18 件) を投入
+npm install
+npm run dev      # http://localhost:5173/
+```
+
+`.dev.vars` に OpenAI / Google Places のキーを入れる:
+
+```
+OPENAI_API_KEY=sk-...
+GOOGLE_MAPS_API_KEY=...
 ```
 
 ```bash
-bun run cf-typegen        # wrangler.jsonc 変更後、型を再生成
-bun run format:fix        # prettier フォーマット
-bun run build             # 本番ビルド
-bun run deploy            # Cloudflare へデプロイ
+npm run cf-typegen   # wrangler.jsonc 変更後、CloudflareBindings 型を再生成
+npm run format:fix   # prettier フォーマット
+npm run build        # 本番ビルド
+npm run deploy       # Cloudflare へデプロイ (本番キーは wrangler secret put)
 ```
-
-`.dev.vars` に `ADMIN_TOKEN=local-admin` 等を入れておくと、登録機能が admin 限定になる (本番は `wrangler secret put ADMIN_TOKEN`)。
 
 ---
 
-# アーキテクチャ解説
+# アーキテクチャ
 
 ## レイヤ俯瞰
 
 ```mermaid
 flowchart LR
-  B["Browser - React SPA"]
-  W["Cloudflare Worker - Hono + Agents SDK"]
-  S["Dynamic Worker - LLM のコードを実行する隔離サンドボックス"]
-  D["Cloudflare Bindings - AI / D1 / R2 / LOADER"]
+  B["Browser - React SPA (Compare.tsx)"]
+  W["Cloudflare Worker - Hono"]
+  S["Dynamic Worker - LLM のコードを SSR する隔離サンドボックス"]
+  D["Cloudflare Bindings - AI / LOADER"]
+  X["外部 API - Google Places / Open-Meteo / ramen-api.dev"]
 
-  B <-->|WebSocket| W
-  W -.->|env.LOADER でスピンアップ| S
-  S -->|Workers RPC で tool 呼び出し| W
+  B <-->|"NDJSON ストリーム (/api/intake, /api/band)"| W
+  W -.->|"env.LOADER でスピンアップ (Dynamic のみ)"| S
   W -->|env| D
+  W --> X
 ```
 
-## Layer 1 — Browser
+## リクエストの流れ
 
-`Chat.tsx` は `useAgentChat` フックで Agent と双方向通信し、メッセージの `parts` を `PartView` が type で分岐。バンドごとに異なる tool 結果を専用 View に振り分ける。
+1. **`POST /api/intake`** — 1 行入力から条件 (日付 / エリア / 人数 / 用途 / 食べたいもの) を抽出。足りなければ AI が聞き返す。
+2. **`POST /api/band`** — `{ band, params, model }` を受け、`streamBand()` がそのパターンの「収集 → 描画」を NDJSON で逐次返す (`tool` / `weather` / `lasttrain` / `izakaya` / `ramen` / `render-start` / パターン別イベント / `metrics`)。4 タブはそれぞれ独立に叩く。
+3. **`POST /api/dynamic-frame`** — Dynamic 用。`{ code, restaurants }` を受け、LLM の React コードを Worker でストリーミング SSR して HTML を返す (iframe の中身)。
+4. **`GET /api/places-photo`** — Google Places の写真をプロキシ (API キーを隠蔽)。
 
-```mermaid
-flowchart TB
-  Chat["Chat.tsx - 入力 + DnD + ModeSelector"] --> Hook["useAgentChat フック"]
-  Hook --> PartView["PartView - message.parts を type で分岐"]
-  PartView -->|tool-search_restaurants| RList["RestaurantList - Controlled"]
-  PartView -->|tool-render_ui| DV["DeclarativeView - Declarative"]
-  PartView -->|tool-render_html| OEV["OpenEndedView - Open-Ended, iframe + CSP"]
-  PartView -->|tool-dynamic_render| DRV["DynamicRenderView - Dynamic, SSR HTML"]
-```
+## Dynamic Worker サンドボックス (Dynamic パターンのみ)
 
-## Layer 2 — Worker (Hono + Agent)
-
-`/agents/*` を `agentsMiddleware` が引き受け、Durable Object として動く `RestaurantAgent` に到達。Agent は `state` (model + mode) と `messages` (会話履歴) を SQLite に永続化、`onChatMessage` でモードに応じた tools を選択。
-
-```mermaid
-flowchart TB
-  Route["/agents/restaurant-agent/default"] --> Mid["agentsMiddleware - hono-agents"]
-  Mid --> Agent["RestaurantAgent - Durable Object, state と messages を永続化"]
-  Agent --> Sw["mode で tools を分岐"]
-  Sw --> Ctl["Controlled - search_restaurants"]
-  Sw --> Dcl["Declarative - search_restaurants + render_ui"]
-  Sw --> Oe["Open-Ended - search_restaurants + render_html"]
-  Sw --> Dy["Dynamic - dynamic_render, React + Dynamic Worker"]
-  Agent --> Reg["registerRestaurant - Vision から正規化して R2 + D1 に保存"]
-```
-
-## Layer 3 — Dynamic Worker サンドボックス (Dynamic バンドのみ)
-
-`dynamic_render` ツール実行時、`@cloudflare/worker-bundler` で LLM が書いた **完全な Cloudflare Worker module** をランタイムでバンドルし、`env.LOADER.get(...)` で **新しい Worker をスピンアップ**して `worker.getEntrypoint().fetch(request)` で実行する ([hono-eval](https://github.com/yusukebe/hono-eval) と同じパターン)。
-
-ホスト側で先に `search_restaurants` を実行し、結果を `request.body` に乗せて Worker に渡す。Worker は React で `renderToString` を呼んで HTML を生成し、`Response` として返す。
+`renderDynamicComponentStream()` が、LLM が書いた `function App({ restaurants })` を **完全な Worker module に包んで** worker-bundler でランタイムバンドルし、`env.LOADER.get(...)` で**新しい Worker をスピンアップ**、`renderToReadableStream` で **Suspense ストリーミング SSR** する。
 
 ```mermaid
 flowchart LR
-  DR["dynamic_render tool execute - host"] -->|1 search_restaurants 実行| DB[("D1")]
-  DR -->|2 createWorker でバンドル react と react-dom を npm 解決| WB["bundled modules"]
-  WB -->|3 env.LOADER.get でスピンアップ| DW["Dynamic Worker - 隔離サンドボックス"]
-  DR -->|4 worker.fetch で restaurants を渡す| DW
-  DW -->|5 renderToString して HTML Response| DR
-  DW -.->|外部 fetch はブロック| X1["外部 - 不可"]
+  DR["/api/dynamic-frame - host"] -->|"1 お店検索 (Places)"| X[("Google Places")]
+  DR -->|"2 createWorker でバンドル (react / react-dom を npm 解決)"| WB["bundled modules"]
+  WB -->|"3 env.LOADER.get でスピンアップ"| DW["Dynamic Worker - 隔離サンドボックス"]
+  DR -->|"4 fetch で restaurants を props として渡す"| DW
+  DW -->|"5 renderToReadableStream で HTML ストリーム"| DR
+  DW -.->|"天気/〆は Suspense で自分で fetch (許可ホストのみ)"| X2["Open-Meteo / ramen-api.dev"]
 ```
 
-worker-bundler の入力 (`createWorker`):
+worker-bundler の入力ファイル:
 
-| ファイル                | 中身                                                                            |
-| ----------------------- | ------------------------------------------------------------------------------- |
-| `src/index.tsx`         | LLM が書いた Worker module (export default { async fetch(request) {...} })      |
-| `src/restaurant-ui.tsx` | `src/ui-components.tsx` の中身を `'./restaurant-ui'` で借用可能にするためコピー |
-| `package.json`          | `{ "dependencies": { "react": "^19.2.6", "react-dom": "^19.2.6" } }`            |
+| ファイル                | 中身                                                                                   |
+| ----------------------- | -------------------------------------------------------------------------------------- |
+| `src/index.tsx`         | LLM の `App` を包んだ Worker module (`renderToReadableStream`)                         |
+| `src/restaurant-ui.tsx` | 非同期フック + worker 用コンポーネント (`Weather` / `RamenList` / `LastTrain` 等)      |
+| `src/base-ui.tsx`       | `src/ui-components.tsx` のソース (`?raw`)。`ShopList` / `RamenCard` 等を借用可能にする |
+| `package.json`          | `{ "dependencies": { "react": "^19.2.6", "react-dom": "^19.2.6" } }`                   |
 
-Worker 内で `react-dom/server.edge` (workerd 互換ビルド) を使うため、`react-dom/server` という拡張子なし import は **host 側で `react-dom/server.edge` に書き換え**ている (node 版は `util` を require するため Worker runtime で動かない)。`prompt` でも `.edge` を必ず使うよう LLM に指示している。
+Worker 内では `react-dom/server.edge` (workerd 互換) を使うため、host 側で import を `.edge` に書き換えている。
 
-## 各バンドの LLM 出力例
+## Open-Ended のセキュリティ (多層防御)
 
-### Controlled (古典)
+AI が書いた HTML を iframe に流す前に、参考実装と同等以上の多層防御をかける ([`OpenEndedView.tsx`](./src/client/modes/OpenEndedView.tsx)):
 
-LLM は `search_restaurants` を呼ぶだけ。一覧表示はクライアントが自動で行う。
-
-```ts
-// LLM が出す tool call
-search_restaurants({ area: '関内', atmosphere: '静か' })
-// → { restaurants: [...] } → クライアントが <RestaurantList /> でレンダ
-```
-
-### Declarative (古典)
-
-`search_restaurants` の後、`render_ui` で Section / Card のツリーを返す。
-
-```ts
-render_ui({
-  title: '関内のオススメ',
-  sections: [
-    {
-      heading: '雰囲気重視',
-      cards: [
-        {
-          title: 'BAR Kingdom',
-          subtitle: '関内 / バー',
-          body: '...',
-          tags: ['静か'],
-        },
-      ],
-    },
-  ],
-})
-// → render_ui は echo back、クライアントが DeclarativeView で再帰描画
-```
-
-### Open-Ended (古典)
-
-`render_html` で完全な HTML 文書を返す。
-
-```ts
-render_html({ html: '<!doctype html><html>...</html>' })
-// → クライアントが iframe (allow-scripts + CSP) に流す
-```
-
-### Dynamic ✨ (新)
-
-`dynamic_render` で **JSX を含む完全な Cloudflare Worker module** を渡す。host 側で `search_restaurants` を実行 → bundled Worker を spawn → `worker.fetch(request)` で SSR HTML を取得。
-
-```tsx
-import React from 'react'
-import { renderToString } from 'react-dom/server.edge'
-import { RestaurantList } from './restaurant-ui'
-
-export default {
-  async fetch(request) {
-    const { restaurants } = await request.json()
-    // 既存コンポーネントを借りる (= Controlled 寄り) / 自分で組む (= Open-Ended 寄り) を自由に選べる
-    const html = renderToString(<RestaurantList restaurants={restaurants} />)
-    return new Response('<!doctype html>' + html, {
-      headers: { 'content-type': 'text/html' },
-    })
-  },
-}
-```
-
-## 「フォーム UI は消える」登録フロー (Admin 限定)
-
-```mermaid
-sequenceDiagram
-  participant U as Admin User
-  participant C as Client
-  participant A as RestaurantAgent
-  participant V as Workers AI Vision
-  participant N as Workers AI 正規化
-  participant R as R2
-  participant D as D1
-
-  U->>C: テキスト「関内のラーメン屋」+ 画像 DnD
-  C->>A: registerRestaurant で text と imageDataUrl と adminToken を送る
-  A->>A: env.ADMIN_TOKEN で認証
-  A->>V: Vision モデルで画像を解析
-  V-->>A: 「二郎系の濃厚ラーメンの写真」
-  A->>N: generateObject で構造化
-  N-->>A: name / area / genre / tags / atmosphere / price_range / note
-  A->>R: PHOTOS に画像を保存
-  A->>D: restaurants に INSERT
-  A->>A: saveMessages で履歴に追加
-  A-->>C: 新メッセージが WebSocket で同期
-  C-->>U: チャット履歴に「保存しました」が表示
-  Note over U,D: 次の search_restaurants で新登録分も hit する
-```
+1. **正規表現サニタイズ** — `javascript:` / `vbscript:` スキームと `on*=` イベントハンドラ属性を無効化
+2. **CSP で通信遮断** — `default-src 'none'` / `connect-src 'none'` / `object-src 'none'` / `form-action 'none'`。`img-src` も `'self'` + `ramen-api.dev` に絞り、画像ビーコンによるデータ送信も塞ぐ
+3. **iframe sandbox で隔離** — `sandbox="allow-scripts"` (same-origin なし)
+4. **srcdoc で opaque origin** — 親や外部にアクセスできない
 
 ## 主要ファイル
 
 ```
 src/
-  index.tsx                 Hono Worker entry。/agents/* を hono-agents へ
-  agent.ts                  RestaurantAgent (4 バンドで tools と prompt を分岐)
-  modes.ts                  Mode 型 (4 バンド) + MODES 一覧
-  models.ts                 Model レジストリ (5 モデル, default は Llama 4 Scout)
-  types.ts                  Restaurant 型 + D1 行 → Restaurant のマッパ
-  ui-components.tsx         共有 UI コンポーネント (Chat + Dynamic Worker 両方で使う)
-                            ※ インラインスタイル、React のみ依存、self-contained
+  index.tsx                Hono Worker entry (/api/intake, /api/band, /api/dynamic-frame, /api/places-photo)
+  compare.ts               streamBand() — 4 パターンの「収集 → 描画」を NDJSON で生成 (デモの心臓部)
+  llm.ts                   resolveModel() — OpenAI / Workers AI のモデル解決
+  models.ts                モデルレジストリ (GPT-4o ほか 8 モデル)
+  ui-components.tsx         共有 UI 部品 (ShopList / RamenCard / WeatherBanner / 等)。Dynamic Worker にも ?raw で埋め込み
   schemas/
-    declarative.ts          Section / Card プリミティブの Zod
+    catalog.ts             ★ UI 部品の Zod カタログ (単一の真実源)。プロンプト生成 + 検証 + 型宣言生成
+    plan.ts                intake / plan の Zod スキーマ
+    declarative.ts         DeclNode 型 (UIツリーのノード)
   tools/
-    search-restaurants.ts   D1 検索ツール (全バンド共通)
-    render-ui.ts            render_ui / render_html (echo back ツール)
-    dynamic-render.ts       Dynamic バンド用 tool (worker-bundler + LOADER で
-                            LLM の Worker module を bundle → spawn → fetch)
-    add-restaurant.ts       Vision + 正規化 + D1 + R2 の登録パイプライン
+    weather.ts             Open-Meteo (エリア別座標で取得)
+    lasttrain.ts           終電の静的テーブル (札幌 / 横浜)
+    places.ts              Google Places (New) searchText + 写真
+    search-restaurants.ts  店検索ツール
+    ramen.ts               ramen-api.dev (?prefecture= で絞り込み)
+    render-ui.ts           Open-Ended の HTML 抽出ヘルパ
+    dynamic-render.ts      Dynamic — worker-bundler + LOADER で LLM コードを Suspense SSR
   client/
-    main.tsx                React entry
-    App.tsx                 サイドバー + メインペインのレイアウト
-    Chat.tsx                useAgentChat + PartView (4 種類の tool 結果を分岐)
-    ModelSelector.tsx       モデルドロップダウン
-    ModeSelector.tsx        4 バンドのセグメントコントロール
+    main.tsx               React entry
+    Compare.tsx            メイン UI (4 タブ + プレビュー/ソース/両方トグル + メトリクス)
+    StreamFrame.tsx        Dynamic フレーム (iframe + 高さ通知)
     modes/
-      DeclarativeView.tsx   Declarative バンドの再帰描画
-      OpenEndedView.tsx     Open-Ended / Dynamic バンドの iframe ラッパ
+      PlanView.tsx         Static の描画 (ShopList でスケルトン → データ)
+      DeclarativeView.tsx  Declarative の再帰描画 (カタログのノードを React へ)
+      OpenEndedView.tsx    Open-Ended の iframe ラッパ (多層防御)
 
-migrations/                 D1 マイグレーション (init + reseed 横浜 18 件)
-wrangler.jsonc              D1 / R2 / Agent (DO) / AI / LOADER バインド
+wrangler.jsonc             AI / LOADER バインド・vars
 ```
+
+> 注: `agent.ts` / `Chat.tsx` / `ControlledView.tsx` / `search-restaurants.ts` 等は旧 Chat/Agents SDK 経路の名残で、現デモ (`Compare.tsx`) では未使用。
 
 ## デバグ
 
-dev サーバを `bun run dev` で立ち上げ、Chrome DevTools MCP もしくは普通の DevTools でネットワーク / コンソールを確認。
-
-詳細な現状ステータス・登壇構成・未完了タスクは **[AGENTS.md](./AGENTS.md)** を参照。
+`npm run dev` で起動し、Chrome DevTools MCP もしくは通常の DevTools でネットワーク / コンソールを確認。詳細な現状ステータス・登壇構成は **[AGENTS.md](./AGENTS.md)** を参照。

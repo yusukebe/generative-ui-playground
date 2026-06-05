@@ -24,18 +24,4 @@
       "binding": "LOADER",
     },
   ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "RestaurantAgent",
-        "class_name": "RestaurantAgent",
-      },
-    ],
-  },
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_sqlite_classes": ["RestaurantAgent"],
-    },
-  ],
 }

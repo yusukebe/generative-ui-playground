@@ -1,15 +1,10 @@
 import { Hono } from 'hono'
-import { agentsMiddleware } from 'hono-agents'
 import { runIntake, streamBand, type Band } from './compare'
 import { DEFAULT_MODEL, type ModelId } from './models'
 import type { PlanParams } from './schemas/plan'
 import { renderDynamicComponentStream } from './tools/dynamic-render'
 
-export { RestaurantAgent } from './agent'
-
 const app = new Hono<{ Bindings: CloudflareBindings }>()
-
-app.use('/agents/*', agentsMiddleware())
 
 /** intake: 1 行入力(会話履歴)から条件を抽出。揃ったら天気+店検索も返す */
 app.post('/api/intake', async (c) => {
