@@ -1,24 +1,26 @@
-import { z } from 'zod'
+// Declarative パターン = AI が「UIツリー」を組む (参考デモの json-render と同じ発想)。
+// 型ごとに props が違い、レイアウト(Stack/Grid)・並び・位置を AI 自身が決める。
+// zod の strict structured output は「型別 props のツリー」が苦手なので、
+// streamObject ではなく streamText で JSON を吐かせて host でパースする。
 
-// 注: OpenAI の strict structured output は全プロパティが required である必要があるため、
-// 省略可フィールドは .optional() ではなく .nullable() を使う (Workers AI でも問題なし)
+/** UIツリーのノード。type ごとに props が異なる。children は子ノードの配列。 */
+export type DeclNode = {
+  type: 'Stack' | 'Grid' | 'Heading' | 'Text' | 'Weather' | 'LastTrain' | 'ShopList' | 'Shop' | string
+  props?: {
+    // レイアウト系
+    gap?: number
+    columns?: number
+    // テキスト系
+    content?: string
+    level?: number
+    // Shop 系 (単体 Shop の後方互換用。通常は ShopList を使う)
+    restaurantId?: string
+    label?: string
+    note?: string
+    [k: string]: unknown
+  }
+  children?: DeclNode[]
+}
 
-// Declarative の「部品(プリミティブ)」語彙。AI はこの type を選んで並べる。
-//  - weather   : 天気バナー (データはホストが渡す)
-//  - lastTrain : 終電案内   (データはホストが渡す)
-//  - shop      : お店/〆ラーメンのカード (restaurantId で実データに紐づく・写真つき)
-export const BlockSchema = z.object({
-  type: z.enum(['weather', 'lastTrain', 'shop']).describe('部品の種類'),
-  restaurantId: z.string().nullable().describe('type=shop のとき、店候補の id'),
-  label: z.string().nullable().describe('type=shop のとき 1軒目 / 2軒目 / 〆 など'),
-  note: z.string().nullable().describe('type=shop のとき その店を選んだ理由(短く)'),
-})
-
-export const DeclarativeUISchema = z.object({
-  title: z.string().nullable(),
-  intro: z.string().nullable().describe('天気をふまえたプラン概要 (1〜2文)'),
-  blocks: z.array(BlockSchema).describe('上から並べる部品。weather → lastTrain → shop... の順を推奨'),
-})
-
-export type DeclarativeUI = z.infer<typeof DeclarativeUISchema>
-export type BlockNode = z.infer<typeof BlockSchema>
+/** Declarative の最終出力 = ルートノード1つ (入れ子ツリー)。 */
+export type DeclarativeUI = DeclNode

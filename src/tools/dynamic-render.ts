@@ -218,8 +218,8 @@ export async function renderDynamicComponent(
  *  こちらが渡すのは「表示部品」と「データ取得フック」だけ。
  *  Suspense 境界や per-item 取得の合成は **AI が書いたコンポーネント側で行う**。 */
 const STREAMING_UI_SOURCE = `import React, { Suspense } from 'react'
-import { RestaurantCard } from './base-ui'
-export { RestaurantCard } from './base-ui'
+import { RestaurantCard, RamenCard, ShopList } from './base-ui'
+export { RestaurantCard, ShopList } from './base-ui'
 
 // 1レンダー内で同じ fetch を使い回すキャッシュ (worker はリクエストごとに新規 spawn なので OK)
 const _cache = new Map()
@@ -276,18 +276,8 @@ export function WeatherSkeleton() {
 export function Ramen({ id }) {
   const r = useRamenShop(id)
   if (!r) return null
-  return (
-    <div style={{ border: '2px solid #f97316', borderRadius: 14, overflow: 'hidden', background: '#fff7ed' }}>
-      {r.photo_url && (
-        <img src={r.photo_url} alt={r.name} style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }} />
-      )}
-      <div style={{ padding: '12px 14px' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#f97316', letterSpacing: '0.05em' }}>🍜 〆の一杯</div>
-        <h3 style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 700 }}>{r.name}</h3>
-        <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6b7280' }}>{r.area} · ラーメン</p>
-      </div>
-    </div>
-  )
+  // 見た目は共有の RamenCard に統一 (Static/Declarative と同じ〆カード)
+  return <RamenCard restaurant={r} />
 }
 
 // エリア→都道府県 (Ramen API の prefecture フィルタ用)
@@ -324,7 +314,7 @@ export function useRamenList(count, area) {
 export function RamenList({ count = 1, area }) {
   const list = useRamenList(count, area)
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 320px))', gap: 12, justifyContent: 'start' }}>
       {list.map((r) => (
         <Suspense key={r.id} fallback={<CardSkeleton />}>
           <Ramen id={r.id} />
@@ -440,7 +430,7 @@ const DOC_CSS = `body{margin:0;background:#f7f8fa;color:#1a1d26;font-family:-app
 function wrapStreamingModule(component: string): string {
   return `import React, { Suspense } from 'react'
 import { renderToReadableStream } from 'react-dom/server.edge'
-import { RestaurantCard, RestaurantList, CardSkeleton, WeatherSkeleton, Ramen, RamenList, Weather, LastTrain } from './restaurant-ui'
+import { RestaurantCard, RestaurantList, ShopList, CardSkeleton, WeatherSkeleton, Ramen, RamenList, Weather, LastTrain } from './restaurant-ui'
 
 ${component}
 

@@ -26,31 +26,46 @@ type Turn = { role: 'user' | 'assistant'; text: string }
 type Metric = { ms: number; tokens: number; chars: number }
 type BandResults = {
   controlled: Plan | null
+  controlledRestaurants: Restaurant[] // Static が id 参照する店 (その gather のもの)
   declarative: DeclarativeUI | null
+  declarativeRestaurants: Restaurant[] // Declarative が id 参照する店 (その gather のもの)
   openEnded: string | null
   dynamicCode: string
   dynamicReady: boolean // code とお店データが揃いフレーム描画可能
   dynamicRestaurants: Restaurant[]
   status: Record<Band, Status>
+  phase: Partial<Record<Band, 'gather' | 'render'>> // 2フェーズ: データ収集中 / 描画中
   metrics: Partial<Record<Band, Metric>>
   ttfr: Partial<Record<Band, number>> // 初描画までの ms (最初の可視コンテンツ)
 }
 
 const EMPTY_RESULTS: BandResults = {
   controlled: null,
+  controlledRestaurants: [],
   declarative: null,
+  declarativeRestaurants: [],
   openEnded: null,
   dynamicCode: '',
   dynamicReady: false,
   dynamicRestaurants: [],
   status: { controlled: 'idle', declarative: 'idle', 'open-ended': 'idle', dynamic: 'idle' },
+  phase: {},
   metrics: {},
   ttfr: {},
 }
 
+// トグル中央ボタンの表記。AI が「何を」生成するかはパターンで違う (これがスペクトラムの肝)。
+// Static はデータだけ・他は UI そのもの(構造/HTML/コード)を生成する。
+const SOURCE_LABEL: Record<Band, string> = {
+  controlled: 'データ',
+  declarative: 'UIツリー',
+  'open-ended': 'HTML',
+  dynamic: 'コード',
+}
+
 const BANDS: { id: Band; label: string; desc: string }[] = [
   { id: 'controlled', label: 'Static', desc: 'ツールで集めたデータを固定コンポーネントに流し込む' },
-  { id: 'declarative', label: 'Declarative', desc: '部品(天気/終電/店)を選んで JSON で並べ streamObject で順に組む' },
+  { id: 'declarative', label: 'Declarative', desc: 'AI が部品を JSON の UIツリーに組み、host が再帰描画する' },
   { id: 'open-ended', label: 'Open-Ended', desc: 'AI が HTML でプラン1枚をフル生成' },
   { id: 'dynamic', label: 'Dynamic ✨', desc: 'AI が React を書き Worker が Suspense SSR' },
 ]
@@ -92,6 +107,8 @@ export function Compare() {
   }, [model])
   const [input, setInput] = useState('')
   const [convo, setConvo] = useState<Turn[]>([])
+  // 生成UI(プレビュー) / AI が書いたソース / 両方を横並び のどれを見せるか
+  const [panelView, setPanelView] = useState<'preview' | 'source' | 'split'>('split')
   const [intaking, setIntaking] = useState(false)
   const [params, setParams] = useState<PlanParams | null>(null)
   const [weather, setWeather] = useState<Weather>(null)
@@ -182,11 +199,14 @@ export function Compare() {
     setRestaurants([])
     setResults((r) => ({
       ...r,
-      ...(b === 'controlled' && { controlled: null }),
-      ...(b === 'declarative' && { declarative: null }),
+      ...(b === 'controlled' && { controlled: null, controlledRestaurants: [] }),
+      ...(b === 'declarative' && { declarative: null, declarativeRestaurants: [] }),
       ...(b === 'open-ended' && { openEnded: null }),
       ...(b === 'dynamic' && { dynamicCode: '', dynamicReady: false, dynamicRestaurants: [] }),
       status: { ...r.status, [b]: 'streaming' },
+      phase: { ...r.phase, [b]: 'gather' as const },
+      // リロード中は前回の結果(メトリクス)を見せない
+      metrics: { ...r.metrics, [b]: undefined },
       ttfr: { ...r.ttfr, [b]: undefined },
     }))
     let izakaya: Restaurant[] = []
@@ -229,7 +249,9 @@ export function Compare() {
               setRestaurants([...izakaya, ...ramen])
               break
             case 'render-start':
-              break // 初描画は生成開始から測るのでここでは何もしない
+              // 収集フェーズ終了 → 描画フェーズへ (プレビューの表示を切り替える)
+              setResults((r) => ({ ...r, phase: { ...r.phase, [b]: 'render' } }))
+              break
             default:
               onBandEvent(b, ev)
           }
@@ -255,16 +277,15 @@ export function Compare() {
       switch (ev.type) {
         case 'controlled':
           s.controlled = (ev.plan as Plan) ?? null
+          if (ev.restaurants) s.controlledRestaurants = ev.restaurants as Restaurant[]
           if (ev.error) s.status = { ...s.status, controlled: 'error' }
           else markFirst()
           break
-        case 'declarative-partial':
-          s.declarative = ev.ui as DeclarativeUI
-          markFirst()
-          break
         case 'declarative':
           s.declarative = (ev.ui as DeclarativeUI) ?? s.declarative
+          if (ev.restaurants) s.declarativeRestaurants = ev.restaurants as Restaurant[]
           if (ev.error) s.status = { ...s.status, declarative: 'error' }
+          else markFirst()
           break
         case 'open-ended':
           s.openEnded = (ev.html as string) ?? null
@@ -456,14 +477,7 @@ export function Compare() {
           ) : (
             <>
               <div className='plan-head'>
-                {/* 条件は intake で確定したものだけ。天気・終電はツールで集めてプラン本文に出す */}
-                <div className='plan-cond'>
-                  <span className='plan-cond__chip'>📅 {params.dateLabel}</span>
-                  <span className='plan-cond__chip'>📍 {params.area}</span>
-                  <span className='plan-cond__chip'>👥 {params.partySize}人</span>
-                  <span className='plan-cond__chip'>🎯 {params.purpose}</span>
-                </div>
-
+                {/* 条件チップ(日付/エリア/人数/用途)は登壇でノイズなので非表示。条件は左のチャットに出る */}
                 <div className='seg seg--bands' role='tablist'>
                   {BANDS.map((b) => (
                     <button
@@ -481,40 +495,41 @@ export function Compare() {
                 </div>
               </div>
 
-              {band === 'dynamic' && (
-                <div className='tool-activity'>
-                  <span className='tool-activity__title'>
-                    🧩 Code Mode: 事前ツール収集はしない。AI はコンポーネントを組むだけで、
-                    天気・〆ラーメンは<strong>描画時にコンポーネントが Suspense で取得</strong>する
-                  </span>
+              {/* 操作行: プレビュー⇔ソースのトグル + リロード + メトリクス (薄く1行に圧縮) */}
+              <div className='band-bar'>
+                <div className='band-bar__toggle'>
+                  <button
+                    type='button'
+                    data-active={panelView === 'preview'}
+                    onClick={() => setPanelView('preview')}
+                  >
+                    プレビュー
+                  </button>
+                  <button
+                    type='button'
+                    data-active={panelView === 'source'}
+                    onClick={() => setPanelView('source')}
+                  >
+                    {SOURCE_LABEL[band]}
+                  </button>
+                  <button
+                    type='button'
+                    data-active={panelView === 'split'}
+                    onClick={() => setPanelView('split')}
+                  >
+                    両方
+                  </button>
                 </div>
-              )}
-
-              {band !== 'dynamic' && toolCalls.length > 0 && (
-                <div className='tool-activity' data-running={results.status[band] === 'streaming'}>
-                  <div className='tool-activity__head'>
-                    <span className='tool-activity__title'>
-                      {results.status[band] === 'streaming'
-                        ? '🤖 このパターンがツールでデータ収集 → 描画中…'
-                        : '🤖 このパターンが収集に使ったツール (毎回実行)'}
+                <div className='band-bar__right'>
+                  {activeMetric && (
+                    <span
+                      className='band-metric'
+                      title='プラン作成の合計コスト = データ収集(ツール) + このパターンの生成。時間 / トークン / 生成文字数'
+                    >
+                      {(activeMetric.ms / 1000).toFixed(1)}s · {activeMetric.tokens}tok ·{' '}
+                      {activeMetric.chars.toLocaleString()}字
                     </span>
-                  </div>
-                  <div className='tool-activity__list'>
-                    {toolCalls.map((name, i) => (
-                      <span key={i} className='tool-activity__chip'>
-                        {TOOL_LABELS[name] ?? name}
-                      </span>
-                    ))}
-                    {results.status[band] === 'streaming' && (
-                      <span className='tool-activity__chip tool-activity__chip--pending'>…</span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <div className='band-tabs__meta'>
-                <p className='band-tabs__desc'>
-                  {BANDS.find((b) => b.id === band)?.desc}
+                  )}
                   <button
                     type='button'
                     className='band-reload'
@@ -524,31 +539,14 @@ export function Compare() {
                   >
                     ↻ リロード
                   </button>
-                </p>
-                <span className='band-metric-row'>
-                  {results.ttfr[band] !== undefined && (
-                    <span
-                      className='band-metric band-metric--ttfr'
-                      title='初描画: 生成開始(ツール収集を含む)から最初の可視コンテンツが出るまで'
-                    >
-                      初描画 {((results.ttfr[band] as number) / 1000).toFixed(1)}s
-                    </span>
-                  )}
-                  {activeMetric && (
-                    <span
-                      className='band-metric'
-                      title='プラン作成の合計コスト = データ収集(ツール) + このパターンの生成。時間 / トークン / 生成文字数'
-                    >
-                      プラン作成 {(activeMetric.ms / 1000).toFixed(1)}s · {activeMetric.tokens}tok ·{' '}
-                      {activeMetric.chars.toLocaleString()}字
-                    </span>
-                  )}
-                </span>
+                </div>
               </div>
 
               <BandPanel
                 band={band}
+                view={panelView}
                 results={results}
+                toolCalls={toolCalls}
                 restaurants={restaurants}
                 weather={weather}
                 lastTrain={lastTrain}
@@ -563,18 +561,24 @@ export function Compare() {
 
 function BandPanel({
   band,
+  view,
   results,
+  toolCalls,
   restaurants,
   weather,
   lastTrain,
 }: {
   band: Band
+  view: 'preview' | 'source' | 'split'
   results: BandResults
+  toolCalls: string[]
   restaurants: Restaurant[]
   weather: Weather
   lastTrain: LastTrain
 }) {
   const status = results.status[band]
+  // 2フェーズ(D/OE)の収集フェーズ中はプレビューに「データ収集中」を出す
+  const gathering = results.phase[band] === 'gather'
   let preview: React.ReactNode
   let script = ''
   let scriptLabel = ''
@@ -587,7 +591,9 @@ function BandPanel({
       ) : (
         <PlanView
           plan={results.controlled}
-          restaurants={restaurants}
+          restaurants={
+            results.controlledRestaurants.length ? results.controlledRestaurants : restaurants
+          }
           weather={weather}
           lastTrain={lastTrain}
         />
@@ -598,21 +604,27 @@ function BandPanel({
     preview = results.declarative ? (
       <DeclarativeView
         ui={results.declarative}
-        restaurants={restaurants}
+        restaurants={
+          results.declarativeRestaurants.length ? results.declarativeRestaurants : restaurants
+        }
         weather={weather}
         lastTrain={lastTrain}
       />
+    ) : gathering ? (
+      <Streaming label='🍳 データ収集中…' chips={toolCalls} />
     ) : (
       <Streaming label='UI ツリーを組み立て中…' />
     )
     script = results.declarative ? JSON.stringify(results.declarative, null, 2) : ''
-    scriptLabel = '🧠 AI が組んだ UI ツリー (JSON · 順に埋まる)'
+    scriptLabel = '🧠 AI が組んだ UI ツリー (JSON)'
   } else if (band === 'open-ended') {
     preview =
       status === 'error' ? (
         <Failed />
       ) : results.openEnded ? (
         <OpenEndedView html={results.openEnded} />
+      ) : gathering ? (
+        <Streaming label='🍳 データ収集中…' chips={toolCalls} />
       ) : (
         <Streaming label='HTML を生成中…' />
       )
@@ -631,26 +643,54 @@ function BandPanel({
     scriptLabel = '🧠 AI が書いた APP コンポーネント (TSX · 流れてくる)'
   }
 
+  const previewBox = (
+    <div className='band-panel__preview'>
+      <div className='band-panel__preview-canvas'>{preview}</div>
+    </div>
+  )
+  const sourceBox = (
+    <div className='band-panel__source'>
+      <div className='band-panel__pane-label'>{scriptLabel}</div>
+      <pre>{script || '…'}</pre>
+    </div>
+  )
+
   return (
-    <div className='band-panel'>
-      <div className='band-panel__preview'>{preview}</div>
-      <details className='band-panel__script'>
-        <summary>{scriptLabel}</summary>
-        <pre>{script || '…'}</pre>
-      </details>
+    <div className='band-panel' data-view={view}>
+      {view === 'split' ? (
+        <div className='band-panel__split'>
+          {sourceBox}
+          {previewBox}
+        </div>
+      ) : view === 'source' ? (
+        sourceBox
+      ) : (
+        previewBox
+      )}
     </div>
   )
 }
 
-function Streaming({ label }: { label: string }) {
+function Streaming({ label, chips }: { label: string; chips?: string[] }) {
   return (
     <div className='thinking-indicator'>
-      <span className='thinking-indicator__dots'>
-        <span />
-        <span />
-        <span />
-      </span>
-      <span className='thinking-indicator__label'>{label}</span>
+      <div className='thinking-indicator__row'>
+        <span className='thinking-indicator__dots'>
+          <span />
+          <span />
+          <span />
+        </span>
+        <span className='thinking-indicator__label'>{label}</span>
+      </div>
+      {chips && chips.length > 0 && (
+        <div className='thinking-indicator__chips'>
+          {chips.map((name, i) => (
+            <span key={i} className='tool-activity__chip'>
+              {TOOL_LABELS[name] ?? name}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

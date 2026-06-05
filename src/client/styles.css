@@ -752,6 +752,23 @@ body,
   font-size: 13px;
   padding: 12px;
 }
+/* Declarative ツリーの Heading / Text */
+.decl-heading {
+  margin: 0;
+  font-weight: 700;
+}
+.decl-heading[data-level='2'] {
+  font-size: 16px;
+}
+.decl-heading[data-level='3'] {
+  font-size: 14px;
+}
+.decl-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
 
 /* Open-Ended mode */
 .open-ended {
@@ -867,14 +884,25 @@ body,
 
 .thinking-indicator {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
   padding: 12px 16px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
   align-self: flex-start;
-  max-width: 320px;
+  max-width: 480px;
+}
+.thinking-indicator__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.thinking-indicator__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 .thinking-indicator__label {
   font-size: 13px;
@@ -1452,6 +1480,25 @@ body,
 .band-panel__preview {
   min-width: 0;
 }
+/* プレビューを「生成された UI」とわかるキャンバス枠で囲む (ソースのコードと対比) */
+.band-panel__preview-canvas {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  min-width: 0;
+}
+/* 各ペインの見出し (左=ソース / 右=生成UI) */
+.band-panel__pane-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 2px 0 8px;
+}
+.band-panel__pane-label--out {
+  color: var(--accent);
+  font-weight: 700;
+}
 .band-panel__script {
   min-width: 0;
 }
@@ -1474,6 +1521,81 @@ body,
   border-radius: 8px;
   overflow: auto;
   max-height: 60vh;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 操作行: プレビュー⇔ソース トグル + メトリクス + リロード (薄く1行) */
+.band-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.band-bar__toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+.band-bar__toggle button {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.band-bar__toggle button[data-active='true'] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.band-bar__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 両方 (ソース左 + プレビュー右 を横並び) */
+.band-panel__split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.band-panel__split .band-panel__source pre {
+  max-height: 70vh;
+}
+@media (max-width: 900px) {
+  .band-panel__split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ソースビュー (AI が書いた JSON/コード/HTML を全幅で) */
+.band-panel__source {
+  min-width: 0;
+}
+.band-panel__source-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 2px 0 8px;
+}
+.band-panel__source pre {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: var(--surface-2);
+  padding: 14px;
+  border-radius: 10px;
+  overflow: auto;
+  max-height: 72vh;
   white-space: pre-wrap;
   word-break: break-word;
 }

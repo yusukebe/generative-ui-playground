@@ -3,15 +3,14 @@
  * 1 行入力 → intake(条件抽出/不足なら質問) → 天気+店検索 → 4 パターンで「プラン」を描き分け。
  * 1 タスクでやることが多い (日付/天気/検索/複数パート) ので、ストリーミングの差が見える。
  *
- *   Controlled  — 既製プランテンプレに値を流し込む (generateObject)
- *   Declarative — section を streamObject で順に組む
+ *   Controlled  — 1フェーズ。streamText でデータツール+build_plan を呼び固定部品に流す
+ *   Declarative — streamText で UIツリー(JSON)を吐き host が再帰描画
  *   Open-Ended  — HTML でプラン1枚
  *   Dynamic     — React コードでプラン → /api/dynamic-frame で Suspense SSR
  */
 import {
   generateObject,
   stepCountIs,
-  streamObject,
   streamText,
   tool,
   type LanguageModelUsage,
@@ -19,7 +18,6 @@ import {
 import { z } from 'zod'
 import { resolveModel } from './llm'
 import type { ModelId } from './models'
-import { DeclarativeUISchema } from './schemas/declarative'
 import { IntakeSchema, PlanSchema, type IntakeResult, type PlanParams } from './schemas/plan'
 import { getLastTrain, type LastTrain } from './tools/lasttrain'
 import { getRamenShops } from './tools/ramen'
@@ -397,7 +395,7 @@ export function streamBand(
                 '集めた店で「1軒目・2軒目・〆」のプランを組む。**4つの取得ツールを呼んだ後、最後に1回だけ**呼ぶ。',
               inputSchema: PlanSchema,
               execute: async (plan) => {
-                send({ type: 'controlled', plan })
+                send({ type: 'controlled', plan, restaurants: [...izakaya, ...ramen] })
                 planJson = JSON.stringify(plan)
                 return '組みました'
               },
@@ -432,7 +430,7 @@ ${COMMON}
                 why: '',
               })),
             }
-            send({ type: 'controlled', plan: fallback })
+            send({ type: 'controlled', plan: fallback, restaurants: all })
             planJson = JSON.stringify(fallback)
           }
           const usage = await result.totalUsage
@@ -443,28 +441,54 @@ ${COMMON}
             chars: planJson.length,
           })
         } else if (band === 'declarative') {
-          const { partialObjectStream, object, usage } = streamObject({
+          // Declarative = AI が UIツリー(JSON)を組む。レイアウト(Stack/Grid)・並び・位置を自分で決める。
+          // 型ごとに props が違う (参考デモの json-render と同じ)。streamText で JSON を吐かせて host でパース。
+          const { textStream, text, usage } = streamText({
             model,
-            schema: DeclarativeUISchema,
             providerOptions,
-            prompt: `あなたは Declarative UI アシスタントです。**部品(blocks)を並べて**夜のプランを組み立てます。
-使える部品 type は weather / lastTrain / shop の3つ。実データはホストが持つので、あなたは「どれを・どの順で並べるか」を選ぶだけ。
-- intro: 天気をふまえたプラン概要 (1〜2文)
-- blocks (上から並ぶ): **weather → lastTrain → shop(お店) → … → shop(〆) の順**で並べる
-  - weather: { type:"weather" } (天気バナー) … **先頭に1回だけ**
-  - lastTrain: { type:"lastTrain" } (終電案内) … **1回だけ** (末尾などに重複させない)
-  - shop: { type:"shop", restaurantId=店候補の id, label="1軒目"/"2軒目"/"〆", note=理由(短く) }
-- weather と lastTrain は**それぞれ1個まで**。同じ type のブロックを繰り返さないこと
-- **提供された全店を shop にする** (お店→〆ラーメンの順)。restaurantId は候補の id を使う
+            prompt: `あなたは Declarative パターンのアシスタントです。**UIツリー(JSON)**を組み立ててください。
+どの部品を、どの順で並べるかはあなたが決めます (ブロックの構成があなたの仕事)。
+
+# 使える部品 (type ごとに props が違う)
+- Stack    { gap?: 2|3|4|6 }                  縦並びコンテナ。children に子ノード
+- Heading  { content: string, level?: 2|3 }    見出し
+- Text     { content: string }                 説明文
+- Weather  {}                                  天気バナー (データはホストが持つ)
+- LastTrain{}                                  終電案内 (データはホストが持つ)
+- ShopList {}                                  店一覧。**1軒目/2軒目の横並びと〆ラーメンの配置は ShopList が中でやる**ので、あなたは置く位置を決めるだけ (個々の店の配置は考えなくてよい)
+
+# 出力形式 (これだけ)
+入れ子の JSON を1つ。各ノードは { "type": "...", "props": {...}, "children": [ ...子ノード... ] }。
+- 最上位は Stack。Heading・Weather・LastTrain・ShopList を**見やすい順に並べる**
+- **ShopList は必ず1つ入れる** (店と〆ラーメンはこれ1つで全部出る)
+- 見出し文言や、天気/終電/店一覧の順序・gap は自由に決めてよい
+- 出力は JSON のみ (\`\`\`json フェンス可)。前後に説明文を書かない
 ${COMMON}
 ${ctx}`,
           })
-          for await (const partial of partialObjectStream) {
-            send({ type: 'declarative-partial', ui: partial })
+          for await (const _ of textStream) {
+            void _
           }
-          const finalUi = await object
-          send({ type: 'declarative', ui: finalUi })
-          metric(await usage, JSON.stringify(finalUi))
+          const raw = await text
+          let tree: unknown
+          try {
+            tree = JSON.parse(stripFence(raw))
+          } catch {
+            // パース失敗時は最低限のフォールバックツリー (Stack に weather/終電/店一覧を並べる)
+            tree = {
+              type: 'Stack',
+              props: { gap: 4 },
+              children: [
+                { type: 'Weather', props: {} },
+                { type: 'LastTrain', props: {} },
+                { type: 'ShopList', props: {} },
+              ],
+            }
+          }
+          // ツリーは自分の gather の id を参照するので、その restaurants を同梱して渡す
+          // (クライアント側の共有 state は別バンドの gather で上書きされ得るため)
+          send({ type: 'declarative', ui: tree, restaurants })
+          metric(await usage, JSON.stringify(tree))
         } else if (band === 'open-ended') {
           // Open-Ended は写真URLも渡し、自前で <img> を全件書く (他パターンは id 参照=軽い)
           const ctxPhotos = planContext(params, weather, restaurants, lastTrain, true)
@@ -496,50 +520,40 @@ ${ctxPhotos}`,
             providerOptions,
             prompt: `あなたは Dynamic パターン(Code Mode)のアシスタントです。夜のプランを表示する React
 コンポーネント function App({ restaurants }) を1つだけ書いてください (import/export は書かない)。
+**あなたはレイアウトを毎回ゼロから設計するデザイナー**です。下記の部品を使い、条件(用途/気分)に
+合わせて構成・見出し・配置を自分で考えてください。固定テンプレの丸写しはしないこと。
 - restaurants = お店 (props で渡る) / 天気・〆ラーメンは専用コンポーネントが自分で取得する
 - **データ取得は全部コンポーネント側**。あなたは型を見て組み立てるだけ (事前取得は不要)
 
 # 使える API (型定義だけ渡します。実装は Worker 側にあり、**あなたは中身を知る必要はありません**)
 \`\`\`ts
 type Restaurant = { id: string; name: string; area: string; genre: string; tags: string[]; note: string | null; price_range: string | null; photo_url?: string | null }
-// 非同期コンポーネント (内部で自分で fetch する。**必ず <Suspense> で包む**)
+// 非同期コンポーネント (内部で自分で fetch する。**必ず <Suspense fallback={...}> で包む**)
 declare const Weather:   React.FC<{ date: string; area?: string }>  // 天気バナー (自分で天気を取得)
 declare const RamenList: React.FC<{ count?: number; area?: string }>  // 〆ラーメン一覧 (自分で一覧+各店を取得)
 // 同期コンポーネント (即描画)
 declare const LastTrain:      React.FC<{ area: string }>                  // 終電案内
 declare const RestaurantCard: React.FC<{ restaurant: Restaurant }>        // お店カード1枚
-declare const RestaurantList: React.FC<{ restaurants: Restaurant[] }>     // お店一覧
+declare const RestaurantList: React.FC<{ restaurants: Restaurant[] }>     // お店一覧(均一グリッド)
+declare const ShopList:       React.FC<{ items: Restaurant[] }>           // 店一覧。1軒目/2軒目の横並び・ラベルを部品が自動配置 (個々の並びを考えなくてよい)
 declare const CardSkeleton:    React.FC  // ローディング(カード高さ・〆ラーメン用)
 declare const WeatherSkeleton: React.FC  // ローディング(バナー高さ・天気用)
 \`\`\`
 
-# 書き方 (テンプレ。店名・天気・終電の値はコードに埋めず、コンポーネントに任せる)
-- お店は **「1軒目」「2軒目」… のラベル付き**で、**横並びグリッド**に (縦に伸ばさない)
-- 〆ラーメンは <RamenList count={1} area="${params.area}" /> を <Suspense> で包むだけ (一覧取得もコンポーネント任せ)
-\`\`\`jsx
-function App({ restaurants }) {
-  const labels = ['1軒目', '2軒目', '3軒目']
-  return (
-    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Suspense fallback={<WeatherSkeleton />}><Weather date="${params.date}" area="${params.area}" /></Suspense>
-      <LastTrain area="${params.area}" />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-        {restaurants.map((r, i) => (
-          <div key={r.id}>
-            <h2 style={{ fontSize: 14, margin: '0 0 6px' }}>{labels[i] || (i + 1) + '軒目'}</h2>
-            <RestaurantCard restaurant={r} />
-          </div>
-        ))}
-      </div>
-      <h2 style={{ fontSize: 14, margin: 0 }}>〆のラーメン</h2>
-      <Suspense fallback={<CardSkeleton />}><RamenList count={1} area="${params.area}" /></Suspense>
-    </div>
-  )
-}
-\`\`\`
-- 上をベースに、用途/気分に合わせて見出し文言や順序を少しだけ調整してよい
-- **店名・天気・終電の値はコードに埋め込まない** (コンポーネントが持つ)
+# 設計の自由(ここがこのパターンの肝)
+- 全体の構成・順序・見出し文言・グルーピングは**あなたが決める**。例: 天気を上に大きく出す / 1軒目を主役として大きく見せ2軒目を脇に置く / 店を縦リストにする / セクションごとに小見出しを付ける、など毎回違ってよい
+- お店は \`<ShopList items={restaurants} />\` を置けば横並び+ラベルまで部品がやる(楽)。もっと凝るなら restaurants.map で RestaurantCard を自分で並べてもよい(件数は可変なので決め打ちしない)
+- レイアウトは inline style で自由に(flex / grid / gap / padding 等)。色やborderも好みで
+
+# 必ず守る制約 (壊さないため)
+- 使うのは上の部品だけ。独自に fetch / import / 外部URL を書かない
+- 非同期の <Weather> と <RamenList> は**必ず個別に <Suspense fallback={<WeatherSkeleton/>}> / <Suspense fallback={<CardSkeleton/>}> で包む**
+- <Weather date="${params.date}" area="${params.area}" /> と <RamenList area="${params.area}" /> と <LastTrain area="${params.area}" /> の引数はこの値を使う
+- **店名・天気・終電などの値はコードに埋め込まない**(コンポーネントが内部で持つ)。あなたは器を組むだけ
 - 出力はコンポーネント関数のみ。説明やコードフェンスは書かない
+
+参考までに最小の断片(これをそのまま使わず、構成は自分で考える):
+\`<Suspense fallback={<WeatherSkeleton />}><Weather date="${params.date}" area="${params.area}" /></Suspense>\`
 ${COMMON}
 ${dynCtx}`,
           })

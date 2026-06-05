@@ -1,12 +1,13 @@
 import { tool } from 'ai'
 import { z } from 'zod'
-import { DeclarativeUISchema } from '../schemas/declarative'
 
+// 注: 旧 Chat/agent 経路用 (現デモ <Compare/> では未使用)。Declarative の UIツリーは
+// 現在 streamText で生成するため、ここは最小スキーマに留める。
 export const renderUITool = tool({
   description:
-    'ユーザに対して構造化された UI を提示する。Section と Card のプリミティブを組み合わせて、検索結果や提案を表現する。',
-  inputSchema: DeclarativeUISchema,
-  execute: async (ui) => ui,
+    'ユーザに対して構造化された UI を提示する。UIツリー(JSON)を組み立てて検索結果や提案を表現する。',
+  inputSchema: z.object({ ui: z.unknown().describe('UIツリー(JSON)') }),
+  execute: async (input) => input,
 })
 
 export const renderHTMLInputSchema = z.object({

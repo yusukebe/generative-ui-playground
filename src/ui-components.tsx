@@ -140,6 +140,47 @@ export function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {
   )
 }
 
+/** id が「ramen:」で始まる店は〆ラーメン専用カードで描く。 */
+export const isRamen = (r?: Restaurant | null) => !!r && typeof r.id === 'string' && r.id.startsWith('ramen:')
+
+/**
+ * 〆ラーメン専用カード (オレンジ枠)。RestaurantCard とは別 UI。
+ * 全パターン共通。データは props で渡す (Dynamic では RamenList が内部で使う)。
+ */
+export function RamenCard({ restaurant }: { restaurant: Restaurant | null }) {
+  if (!restaurant) return <RestaurantCardSkeleton />
+  return (
+    <div
+      style={{
+        border: `2px solid ${colors.accent}`,
+        borderRadius: 14,
+        overflow: 'hidden',
+        background: '#fff7ed',
+        width: '100%',
+        maxWidth: 360,
+        fontFamily:
+          "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans', 'Noto Sans JP', sans-serif",
+      }}
+    >
+      {restaurant.photo_url && (
+        <img
+          src={restaurant.photo_url}
+          alt={restaurant.name}
+          loading='lazy'
+          style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block', background: colors.surface2 }}
+        />
+      )}
+      <div style={{ padding: '12px 14px' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: colors.accent, letterSpacing: '0.05em' }}>🍜 〆の一杯</div>
+        <h3 style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 700 }}>{restaurant.name}</h3>
+        <p style={{ margin: '4px 0 0', fontSize: 12, color: colors.muted }}>
+          {restaurant.area} · {restaurant.genre || 'ラーメン'}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export type WeatherInfo = {
   emoji: string
   label: string
@@ -254,6 +295,65 @@ export function RestaurantListSkeleton({ count = 4 }: { count?: number }) {
             animation: 'rc-shimmer 1.2s infinite',
           }}
         />
+      ))}
+    </div>
+  )
+}
+
+// ShopList の1要素。生の Restaurant でも、ラベル/メモ付きでも渡せる。
+export type ShopItem =
+  | Restaurant
+  | { restaurant: Restaurant | null; label?: string; note?: string }
+
+function normalizeShopItem(it: ShopItem | null | undefined): {
+  restaurant: Restaurant | null
+  label?: string
+  note?: string
+} {
+  if (!it) return { restaurant: null }
+  if ('restaurant' in it) return it
+  return { restaurant: it as Restaurant }
+}
+
+const IZAKAYA_LABELS = ['1軒目', '2軒目', '3軒目', '4軒目']
+
+/**
+ * プランの店リストを **レイアウトごと** 受け持つ高レベル共有部品 (全パターン共通)。
+ * - 居酒屋系(id が ramen: 以外)は横並びグリッドに自動配置
+ * - 〆ラーメン(id が ramen:)は専用カードで下に単独配置
+ * これにより「2枚をGrid・1枚を下」のような配置をホスト/AI が考える必要がない。
+ * 参考デモの ItineraryTimeline と同じ発想 (部品が中の並びを持つ)。
+ */
+export function ShopList({ items = [] }: { items?: ShopItem[] }) {
+  const norm = (items ?? []).map(normalizeShopItem)
+  const izakaya = norm.filter((n) => !isRamen(n.restaurant))
+  const ramen = norm.filter((n) => isRamen(n.restaurant))
+  const labelStyle = { color: colors.accent, fontWeight: 700, fontSize: 13 } as const
+  const noteStyle = { margin: '2px 0 0', fontSize: 12, color: colors.muted } as const
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(min(260px, 100%), 320px))',
+          gap: 12,
+          justifyContent: 'start',
+        }}
+      >
+        {izakaya.map((it, i) => (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={labelStyle}>{it.label || IZAKAYA_LABELS[i] || `${i + 1}軒目`}</div>
+            {it.restaurant ? <RestaurantCard restaurant={it.restaurant} /> : <RestaurantCardSkeleton />}
+            {it.note && <p style={noteStyle}>{it.note}</p>}
+          </div>
+        ))}
+      </div>
+      {ramen.map((it, i) => (
+        <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={labelStyle}>{it.label || '〆'}</div>
+          <RamenCard restaurant={it.restaurant} />
+          {it.note && <p style={noteStyle}>{it.note}</p>}
+        </div>
       ))}
     </div>
   )
