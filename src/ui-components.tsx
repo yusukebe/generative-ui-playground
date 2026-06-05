@@ -209,6 +209,29 @@ export function LastTrainCard({ lastTrain }: { lastTrain: LastTrainInfo }) {
   )
 }
 
+// 部品ごとのスケルトン (収集中はその部品だけスケルトン→データで実物に置き換わる)
+const _skel = {
+  background: `linear-gradient(90deg, ${colors.surface2} 25%, ${colors.surface} 50%, ${colors.surface2} 75%)`,
+  backgroundSize: '200% 100%',
+  animation: 'rc-shimmer 1.2s infinite',
+  border: `1px solid ${colors.border}`,
+}
+
+/** 天気バナーのスケルトン (バナー高さに合わせる) */
+export function WeatherBannerSkeleton() {
+  return <div style={{ ..._skel, height: 52, borderRadius: 12 }} />
+}
+
+/** 終電カードのスケルトン */
+export function LastTrainCardSkeleton() {
+  return <div style={{ ..._skel, height: 52, borderRadius: 12 }} />
+}
+
+/** お店カード1枚のスケルトン (カード高さに合わせてレイアウトシフトを防ぐ) */
+export function RestaurantCardSkeleton() {
+  return <div style={{ ..._skel, height: 260, width: '100%', maxWidth: 360, borderRadius: 12 }} />
+}
+
 /** 検索中に出すスケルトン (記事いわく「ないと不安」レベルの体験差) */
 export function RestaurantListSkeleton({ count = 4 }: { count?: number }) {
   return (

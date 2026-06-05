@@ -580,16 +580,18 @@ function BandPanel({
   let scriptLabel = ''
 
   if (band === 'controlled') {
-    preview = results.controlled ? (
-      <PlanView
-        plan={results.controlled}
-        restaurants={restaurants}
-        weather={weather}
-        lastTrain={lastTrain}
-      />
-    ) : (
-      <Streaming label='プランを組み立て中…' />
-    )
+    // plan=null(収集中)でも PlanView が部品ごとにスケルトン→データで埋める
+    preview =
+      status === 'error' ? (
+        <Failed />
+      ) : (
+        <PlanView
+          plan={results.controlled}
+          restaurants={restaurants}
+          weather={weather}
+          lastTrain={lastTrain}
+        />
+      )
     script = results.controlled ? JSON.stringify(results.controlled, null, 2) : ''
     scriptLabel = 'AI が埋めたのは title と steps だけ (天気/終電/店は固定コンポーネント+データ)'
   } else if (band === 'declarative') {

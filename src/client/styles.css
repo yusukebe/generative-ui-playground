@@ -1514,6 +1514,15 @@ body,
   font-size: 16px;
   font-weight: 700;
 }
+.plan__title-skeleton {
+  height: 22px;
+  width: 220px;
+  max-width: 70%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: rc-shimmer 1.2s infinite;
+}
 .plan__weather {
   font-size: 13px;
   color: var(--text-muted);
