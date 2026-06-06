@@ -20,17 +20,18 @@ export function prefectureForArea(area = ''): string {
   return sapporo.some((m) => a.includes(m)) ? '北海道' : '神奈川県'
 }
 
-/** 〆ラーメン候補を Restaurant 形に揃えて返す。area に合う都道府県で絞り込む。 */
+/** 〆ラーメン候補を Restaurant 形に揃えて返す。area に合う都道府県で絞り込む。
+ *  北海道はたくさん登録があるので、多めに取得して **ランダムに count 件** 選ぶ(毎回違う〆に)。 */
 export async function getRamenShops(area = '', count = 1): Promise<Restaurant[]> {
   const prefecture = prefectureForArea(area)
   const url =
-    `https://ramen-api.dev/shops?perPage=${Math.min(count, 100)}` +
-    `&prefecture=${encodeURIComponent(prefecture)}`
+    `https://ramen-api.dev/shops?perPage=100` + `&prefecture=${encodeURIComponent(prefecture)}`
   const res = await fetch(url)
   if (!res.ok) return []
   const data = (await res.json()) as { shops?: RamenShop[] }
+  const shops = [...(data.shops ?? [])].sort(() => Math.random() - 0.5).slice(0, Math.max(1, count))
   const now = Date.now()
-  return (data.shops ?? []).map((s) => ({
+  return shops.map((s) => ({
     id: `ramen:${s.id}`,
     name: s.name,
     area: s.prefecture ?? prefecture,

@@ -356,44 +356,51 @@ export function streamBand(
           }
           const dq =
             [params.craving, params.purpose, params.mood].filter(Boolean).join(' ') || 'おすすめ'
+          // 参考実装(旅行プランナー)の Static と同じ: AI が呼んだツールの結果を
+          // ツールコール順に固定部品へ流す(switch(tool))。呼ばれなかったツールは出ない。
+          // static-step イベント = { tool, output }。クライアントが順に描画する。
           const staticTools = {
             get_weather: tool({
-              description: '対象エリアの天気を取得する。1回だけ呼ぶ。',
+              description: '対象エリアの天気を取得する。',
               inputSchema: z.object({ date: z.string().describe('対象日 YYYY-MM-DD') }),
               execute: async ({ date }) => {
                 logTool('get_weather', { date })
                 const w = await getWeather(date, params.area)
                 send({ type: 'weather', weather: w })
+                send({ type: 'static-step', tool: 'get_weather', output: w })
                 return w ?? { label: '取得できず' }
               },
             }),
             get_last_train: tool({
-              description: 'エリアの終電目安を取得する。1回だけ呼ぶ。',
+              description: 'エリアの終電目安を取得する。',
               inputSchema: z.object({ area: z.string().describe('エリア名') }),
               execute: async ({ area }) => {
                 logTool('get_last_train', { area })
                 const lt = getLastTrain(area)
                 send({ type: 'lasttrain', lastTrain: lt })
+                send({ type: 'static-step', tool: 'get_last_train', output: lt })
                 return lt
               },
             }),
             search_restaurants: tool({
-              description: '飲み会向けのお店を検索する。1回だけ呼ぶ。',
+              description: '飲み会向けのお店を検索する。',
               inputSchema: SearchInputSchema,
               execute: async (input) => {
                 logTool('search_restaurants', input)
                 izakaya = await findRestaurants(env, { ...input, limit: 2 })
                 send({ type: 'izakaya', restaurants: izakaya })
+                send({ type: 'static-step', tool: 'search_restaurants', output: izakaya })
                 return { restaurants: izakaya.map((r) => ({ id: r.id, name: r.name })) }
               },
             }),
             get_ramen: tool({
-              description: '〆のラーメンを取得する。1回だけ呼ぶ。',
+              description: '〆のラーメンを取得する。',
               inputSchema: z.object({ count: z.number().nullable().describe('件数 (省略時 1)') }),
               execute: async () => {
                 logTool('get_ramen', {})
                 ramen = await getRamenShops(params.area, 1)
                 send({ type: 'ramen', restaurants: ramen })
+                send({ type: 'static-step', tool: 'get_ramen', output: ramen })
                 return { restaurants: ramen.map((r) => ({ id: r.id, name: r.name })) }
               },
             }),
@@ -403,29 +410,19 @@ export function streamBand(
             tools: staticTools,
             stopWhen: stepCountIs(8),
             providerOptions,
-            prompt: `あなたは Static パターンのアシスタントです。**ツールを呼んでデータを集めるだけ**です。
-並び順・レイアウト・文言はあなたが作る必要はありません(ホストが固定コンポーネントで描画します)。
-次の4つを呼んだら終わりです:
-1. get_weather(date="${params.date}")
-2. get_last_train(area="${params.area}")
-3. search_restaurants(area="${params.area}", query="${dq}"): お店2件
-4. get_ramen(): 〆のラーメン1件
+            prompt: `あなたは Static パターンのアシスタントです。ユーザーの要望に応じて、**必要なツールを呼んでください**。
+各ツールの結果はそのまま固定コンポーネントで表示されます(並び・レイアウト・文言はホスト側が固定で持つので、あなたが作る必要はありません)。
+使えるツール (要望に関係するものを呼ぶ。**必ずしも全部呼ばなくてよい**):
+- get_weather(date="${params.date}"): 天気
+- get_last_train(area="${params.area}"): 終電
+- search_restaurants(area="${params.area}", query="${dq}"): お店2件
+- get_ramen(): 〆のラーメン
 ${COMMON}
 条件: ${params.dateLabel}(${params.date}) / ${params.area} / ${params.partySize}人 / 用途:${params.purpose} / 気分:${params.mood || '指定なし'} / 食べたいもの:${params.craving || '指定なし'}`,
           })
           for await (const _ of result.fullStream) {
             void _
           }
-          // 並びはホストが固定で組む (AI は触らない = 純粋な Controlled)。
-          // title はクライアントが params から即描画するのでここでは送らない。
-          const all = [...izakaya, ...ramen]
-          const plan = {
-            steps: all.map((r, i) => ({
-              label: r.id.startsWith('ramen:') ? '〆' : `${i + 1}軒目`,
-              restaurantId: r.id,
-            })),
-          }
-          send({ type: 'controlled', plan, restaurants: all })
           // Static の「ソース」= AI が呼んだツール列(これが Static で AI がやったこと全部)。
           // 字数メトリクスもこの全体長で測る。
           const toolText = toolLog
@@ -453,10 +450,12 @@ ${declarativeCatalogText()}
 
 # 出力形式 (これだけ)
 入れ子の JSON を1つ。各ノードは { "type": "...", "props": {...}, "children": [ ...子ノード... ] }。
-- 最上位は Stack。Heading・Weather・LastTrain・ShopList を**見やすい順に並べる**
+- 最上位は Stack。Heading・Weather・LastTrain・ShopList を組み合わせて構成する
 - **ShopList は必ず1つ入れる** (店と〆ラーメンはこれ1つで全部出る)
-- **各店の店名・紹介は ShopList が出すので、Text で店を1軒ずつ説明し直さない**(重複するため)。Text は全体の短い導入や補足だけに使う
-- 見出し文言や、天気/終電/店一覧の順序・gap は自由に決めてよい
+- **ここがあなたの腕の見せ所**: ただ縦に並べるだけ(=Static と同じ)にせず、**構成にひと工夫**を:
+  - セクションごとに **Heading** を付ける(例「今夜の天気」「お店」「〆と終電」)
+  - **天気と終電を Grid(columns:2) で横並び**にして情報バー風にする、など段組みを使う
+  - 全体の短い導入 **Text** を1つ入れてもよい(店ごとの説明は ShopList が出すので Text で繰り返さない)
 - 出力は JSON のみ (\`\`\`json フェンス可)。前後に説明文を書かない
 ${COMMON}
 ${ctx}`,

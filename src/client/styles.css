@@ -1610,12 +1610,34 @@ body,
 /* 両方 (ソース左 + プレビュー右 を横並び) */
 .band-panel__split {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 12px minmax(0, 1fr);
+  gap: 0;
   align-items: start;
 }
 .band-panel__split .band-panel__source pre {
   max-height: 70vh;
+}
+/* 中央のドラッグ仕切り (左右の幅を可変に) */
+.band-panel__split-divider {
+  align-self: stretch;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.band-panel__split-divider::before {
+  content: '';
+  width: 3px;
+  height: 44px;
+  border-radius: 2px;
+  background: var(--border);
+  transition:
+    background 0.15s,
+    height 0.15s;
+}
+.band-panel__split-divider:hover::before {
+  background: var(--accent);
+  height: 64px;
 }
 @media (max-width: 900px) {
   .band-panel__split {

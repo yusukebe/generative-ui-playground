@@ -113,17 +113,14 @@ export function useRamenList(count, area) {
   if (!e) {
     e = { done: false, data: [] }
     e.promise = Promise.resolve()
+      // 多めに取得してランダムに count 件 (北海道はたくさん登録があるので毎回違う〆に)
       .then(() =>
-        fetch(
-          'https://ramen-api.dev/shops?perPage=' +
-            (count || 1) +
-            '&prefecture=' +
-            encodeURIComponent(pref)
-        )
+        fetch('https://ramen-api.dev/shops?perPage=100&prefecture=' + encodeURIComponent(pref))
       )
       .then((r) => r.json())
       .then((d) => {
-        e.data = ((d && d.shops) || []).map((s) => ({ id: s.id, name: s.name }))
+        const shops = ((d && d.shops) || []).slice().sort(() => Math.random() - 0.5)
+        e.data = shops.slice(0, count || 1).map((s) => ({ id: s.id, name: s.name }))
       })
       .catch(() => {
         e.data = []

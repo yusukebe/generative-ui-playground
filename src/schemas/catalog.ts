@@ -39,6 +39,13 @@ export const CATALOG: Record<string, CatalogEntry> = {
     description: '縦並びコンテナ',
     declarative: { props: z.object({ gap }), children: true },
   },
+  Grid: {
+    description: '段組み(横並び)。children を columns 列に並べる。天気+終電を横に置く等',
+    declarative: {
+      props: z.object({ columns: z.union([z.literal(2), z.literal(3)]).optional(), gap }),
+      children: true,
+    },
+  },
   Heading: {
     description: '見出し',
     declarative: { props: z.object({ content: z.string(), level }) },

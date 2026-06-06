@@ -8,7 +8,7 @@ import { ModelSelector } from './ModelSelector'
 import { StreamFrame } from './StreamFrame'
 import { DeclarativeView } from './modes/DeclarativeView'
 import { OpenEndedView } from './modes/OpenEndedView'
-import { PlanView } from './modes/PlanView'
+import { StaticView } from './modes/StaticView'
 
 type Band = 'controlled' | 'declarative' | 'open-ended' | 'dynamic'
 type Status = 'idle' | 'streaming' | 'done' | 'error'
@@ -27,7 +27,8 @@ type Metric = { ms: number; tokens: number; chars: number }
 type BandResults = {
   controlled: Plan | null
   controlledRestaurants: Restaurant[] // Static が id 参照する店 (その gather のもの)
-  controlledToolText: string // Static のソース = AI が呼んだツール列 (build_plan 含む)
+  controlledSteps: { tool: string; output: unknown }[] // 参考実装の Static: 呼ばれたツールの出力を順に
+  controlledToolText: string // Static のソース = AI が呼んだツール列
   declarative: DeclarativeUI | null
   declarativeRestaurants: Restaurant[] // Declarative が id 参照する店 (その gather のもの)
   openEnded: string | null
@@ -43,6 +44,7 @@ type BandResults = {
 const EMPTY_RESULTS: BandResults = {
   controlled: null,
   controlledRestaurants: [],
+  controlledSteps: [],
   controlledToolText: '',
   declarative: null,
   declarativeRestaurants: [],
@@ -209,6 +211,7 @@ export function Compare() {
       ...(b === 'controlled' && {
         controlled: null,
         controlledRestaurants: [],
+        controlledSteps: [],
         controlledToolText: '',
       }),
       ...(b === 'declarative' && { declarative: null, declarativeRestaurants: [] }),
@@ -291,6 +294,11 @@ export function Compare() {
           if (ev.restaurants) s.controlledRestaurants = ev.restaurants as Restaurant[]
           if (ev.error) s.status = { ...s.status, controlled: 'error' }
           else markFirst()
+          break
+        case 'static-step':
+          // 参考実装の Static: 呼ばれたツールの出力を順に積む (switch(tool) で描画)
+          s.controlledSteps = [...s.controlledSteps, { tool: ev.tool as string, output: ev.output }]
+          markFirst()
           break
         case 'controlled-source':
           s.controlledToolText = (ev.source as string) ?? ''
@@ -615,24 +623,44 @@ function BandPanel({
   const status = results.status[band]
   // 2フェーズ(D/OE)の収集フェーズ中はプレビューに「データ収集中」を出す
   const gathering = results.phase[band] === 'gather'
+  // 「両方」表示の左右比率 (中央の仕切りをドラッグで調整)
+  const [splitRatio, setSplitRatio] = useState(0.5)
+  const splitRef = useRef<HTMLDivElement>(null)
+  const startSplitDrag = (e: React.MouseEvent) => {
+    e.preventDefault()
+    const onMove = (ev: MouseEvent) => {
+      const box = splitRef.current
+      if (!box) return
+      const rect = box.getBoundingClientRect()
+      setSplitRatio(Math.max(0.15, Math.min(0.85, (ev.clientX - rect.left) / rect.width)))
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.userSelect = ''
+    }
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
   let preview: React.ReactNode
   let script = ''
   let scriptLabel = ''
 
   if (band === 'controlled') {
-    // plan=null(収集中)でも PlanView が部品ごとにスケルトン→データで埋める
+    // 参考実装の Static と同じ: AI が呼んだツールの出力を順に固定部品へ。実行中はスケルトン。
+    const runningTools =
+      status === 'streaming'
+        ? toolCalls.filter((t) => !results.controlledSteps.some((s) => s.tool === t))
+        : []
     preview =
       status === 'error' ? (
         <Failed />
       ) : (
-        <PlanView
-          plan={results.controlled}
-          restaurants={
-            results.controlledRestaurants.length ? results.controlledRestaurants : restaurants
-          }
+        <StaticView
+          steps={results.controlledSteps}
+          runningTools={runningTools}
           title={params ? `${params.area}の夜のプラン` : undefined}
-          weather={weather}
-          lastTrain={lastTrain}
         />
       )
     script =
@@ -698,8 +726,21 @@ function BandPanel({
   return (
     <div className='band-panel' data-view={view}>
       {view === 'split' ? (
-        <div className='band-panel__split'>
+        <div
+          className='band-panel__split'
+          ref={splitRef}
+          style={{
+            gridTemplateColumns: `minmax(0, ${splitRatio}fr) 12px minmax(0, ${1 - splitRatio}fr)`,
+          }}
+        >
           {sourceBox}
+          <div
+            className='band-panel__split-divider'
+            onMouseDown={startSplitDrag}
+            role='separator'
+            aria-orientation='vertical'
+            title='ドラッグで左右の幅を調整'
+          />
           {previewBox}
         </div>
       ) : view === 'source' ? (
