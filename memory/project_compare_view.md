@@ -16,7 +16,7 @@ metadata:
 **共有部品** (`src/ui-components.tsx`): `ShopList`(1軒目/2軒目横グリッド+〆を専用カードで配置=レイアウトを部品が所有)/ `RamenCard` / `WeatherBanner` / `LastTrainCard` / `RestaurantCard`。全パターン共通(Dynamic Worker へは `?raw` で埋め込み)。
 
 **4 パターン**(差別化済):
-- **Static** = 参考実装(旅行プランナー)準拠。AI は **データ取得ツールを呼ぶだけ**(必須でない・LLM が選ぶ)、呼ばれたツールの出力を**ツールコール順に `switch(tool)` で固定部品へ**(`src/client/modes/StaticView.tsx`)。**build_plan 撤去**= AI のオーサリングゼロ。title はホスト固定テンプレ(クライアント即描画)。「ツール」トグルでツールコール列が見える。
+- **Static** = 参考実装(旅行プランナー)を参考に。AI は **データ取得ツールを呼ぶだけ**(必須でない・LLM が選ぶ=出る部品の集合は可変)、呼ばれたツールの出力を `switch(tool)` で固定部品へ(`src/client/modes/StaticView.tsx`)。**表示順はホスト固定(天気→店→〆→終電)** ※ 参考実装は LLM 呼び出し順だが「〆が最初に出て変」なので意図的に固定にした(ユーザ確認済)。**build_plan 撤去**= AI のオーサリングゼロ。title はホスト固定テンプレ(クライアント即描画)。「ツール」トグルには AI の生のツールコール列(=呼び出し順)が見える。
 - **Declarative** = AI が UIツリー(JSON)を組む。**Grid(段組み)・Heading(セクション)・Text** で構成された page にして Static と差をつける(天気+終電を Grid 2カラム等)。host が再帰描画(`DeclarativeView`)。
 - **Open-Ended** = HTML 1枚 → iframe。**多層防御**(①正規表現サニタイズ ②CSP `connect-src none`+`img-src` を self/ramen-api.dev に絞る ③sandbox=allow-scripts ④srcdoc opaque origin)。
 - **Dynamic** = Code Mode。AI が `function App({restaurants})` を書く → Worker Loader で SSR。ランタイムは `src/tools/dynamic-runtime.tsx`(実ファイル・`?raw` 埋め込み・`@ts-nocheck`)。天気/〆は描画時に自分で fetch(Suspense)。**人工遅延は撤去**。

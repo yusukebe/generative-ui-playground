@@ -19,6 +19,7 @@ type Ctx = {
   list: Restaurant[]
   weather: WeatherInfo
   lastTrain: LastTrainInfo
+  shopListShown: boolean // ShopList は1つだけ描く (AI が複数置いても重複させない)
 }
 
 /**
@@ -69,7 +70,9 @@ function renderNode(node: DeclNode | null | undefined, ctx: Ctx, key?: number): 
       return <LastTrainCard key={key} lastTrain={ctx.lastTrain} />
     case 'ShopList':
       // 店の並び(1軒目2軒目の横並び・〆を下に)は ShopList が中で持つ。
-      // AI は「ここに店一覧を置く」と決めるだけ。ホストが集めた店を流し込む。
+      // AI が複数 ShopList を置いても、2つ目以降は描画しない(店の重複を防ぐ)。
+      if (ctx.shopListShown) return null
+      ctx.shopListShown = true
       return <ShopList key={key} items={ctx.list} />
     case 'Shop': {
       const r = props.restaurantId ? ctx.byId.get(props.restaurantId) : undefined
@@ -103,6 +106,7 @@ export function DeclarativeView({
     list: restaurants,
     weather,
     lastTrain,
+    shopListShown: false,
   }
   return <div className='declarative'>{renderNode(ui, ctx)}</div>
 }
